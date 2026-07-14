@@ -1,4 +1,4 @@
-# Hollowreach — a handcrafted voxel sandbox
+# Hollowreach — a vibecoded voxel sandbox
 
 A 3D first-person Minecraft-like, built from scratch in the browser: its **own
 WebGL2 voxel engine, procedural world, procedural textures and item models,

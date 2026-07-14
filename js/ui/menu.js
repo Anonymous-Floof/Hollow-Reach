@@ -49,7 +49,7 @@ export class Menu {
     ];
     this.root.innerHTML = `
       <div class="about">
-        <p class="lead"><b>Hollowreach</b> is a handcrafted voxel sandbox built entirely
+        <p class="lead"><b>Hollowreach</b> is a vibecoded voxel sandbox built entirely
         from scratch in the browser — its own engine, procedural world, textures and
         models, with no game engine and no external libraries.</p>
 
