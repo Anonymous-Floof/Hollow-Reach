@@ -1,3 +1,7 @@
+> [!NOTE]
+> - This project was built with 99% AI assistance (Claude Opus & Fable) under human oversight. 🤖
+> - Expect there to be bugs and balancing issues
+
 # Hollowreach — a vibecoded voxel sandbox
 
 A 3D first-person Minecraft-like, built from scratch in the browser: its **own
