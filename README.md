@@ -11,6 +11,25 @@ multiplayer** — all with **zero external libraries**. Mine, smelt, craft, tier
 up tools/armour, build, survive the night, and play with a friend over a
 copy-pasted invite code, all in **persistent, shareable worlds**.
 
+<table>
+<tr>
+<td width="50%"><img src="screenshots/reflections.png" width="100%" alt="Calm water reflecting the shoreline and sky"><br><sub>Real-time water reflections mirror the shoreline and sky.</sub></td>
+<td width="50%"><img src="screenshots/shadows.png" width="100%" alt="Sunlight and cast shadows under a tree"><br><sub>Cast shadows dapple the grass beneath a tree.</sub></td>
+</tr>
+<tr>
+<td><img src="screenshots/godrays.png" width="100%" alt="God-rays filtering through a forest canopy"><br><sub>Sunlight and god-rays filtering through the canopy.</sub></td>
+<td><img src="screenshots/night-2.png" width="100%" alt="A moonlit bay with drifting clouds and stars"><br><sub>Moonlight over a quiet bay, with drifting clouds and stars.</sub></td>
+</tr>
+<tr>
+<td><img src="screenshots/house.png" width="100%" alt="A torch-lit stone cottage interior"><br><sub>A torch-lit stone cottage, with chests, a bed and glass windows.</sub></td>
+<td><img src="screenshots/night-1.png" width="100%" alt="A lakeside cottage at night, lit and reflected on the water"><br><sub>A cottage lit against the night, reflected on still water.</sub></td>
+</tr>
+<tr>
+<td><img src="screenshots/sheep.png" width="100%" alt="A sheep on a coastal meadow"><br><sub>A sheep grazes a coastal meadow.</sub></td>
+<td><img src="screenshots/pig.png" width="100%" alt="A pig on a sunlit beach beneath volumetric clouds"><br><sub>A pig wanders a sunlit beach beneath volumetric clouds.</sub></td>
+</tr>
+</table>
+
 ## Running it
 
 **Double-click `run.bat`.** It starts a tiny local Python server (ES modules can't
