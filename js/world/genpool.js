@@ -4,8 +4,9 @@
 // same pattern can later host threaded lighting/meshing or AI ticks.
 
 export class GenPool {
-  constructor(seed, onChunk) {
+  constructor(seed, onChunk, genVer = 0) {
     this.seed = seed >>> 0;
+    this.genVer = genVer;
     this.onChunk = onChunk;
     this.queue = [];        // [cx, cz] jobs waiting for a free worker
     this.workers = [];
@@ -30,7 +31,7 @@ export class GenPool {
       if (this.busy[i]) continue;
       const [cx, cz] = this.queue.shift();
       this.busy[i] = true;
-      this.workers[i].postMessage({ cx, cz, seed: this.seed });
+      this.workers[i].postMessage({ cx, cz, seed: this.seed, ver: this.genVer });
     }
   }
 

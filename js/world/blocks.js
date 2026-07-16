@@ -38,6 +38,9 @@ const DEF = [
   { key: "sand", name: "Sand", render: "cube", solid: true, opaque: true,
     tex: { all: "sand" }, hardness: 0.8, tool: "shovel", minTier: 0, drop: "sand" },
 
+  { key: "snowturf", name: "Snowy Grass", render: "cube", solid: true, opaque: true,
+    tex: { top: "snow_top", side: "snowturf_side", bottom: "loam" }, hardness: 1.0, tool: "shovel", minTier: 0, drop: "loam" },
+
   { key: "sandstone", name: "Sandstone", render: "cube", solid: true, opaque: true,
     tex: { all: "sandstone" }, hardness: 1.2, tool: "pick", minTier: TIER.wood, drop: "sandstone" },
 
@@ -91,7 +94,18 @@ const DEF = [
     tex: { all: "ore_sparkstone" }, hardness: 2.2, tool: "pick", minTier: TIER.ferralite, drop: "sparkstone", dropCount: 4, light: 6, lightColor: [0.45, 0.85, 0.98] },
 
   { key: "ore_azurite", name: "Azurite Ore", render: "cube", solid: true, opaque: true,
-    tex: { all: "ore_azurite" }, hardness: 2.2, tool: "pick", minTier: TIER.stone, drop: "azurite", dropCount: 5 },
+    tex: { all: "ore_azurite" }, hardness: 2.2, tool: "pick", minTier: TIER.stone, drop: "azurite" },
+
+  // Gloamite: a dusk-violet ore found only in the deeps. Attuned to distance and
+  // dark places — it powers the Wayshard today and is reserved for future
+  // teleport/void tech (portals, linked chests, recall gear).
+  { key: "ore_gloamite", name: "Gloamite Ore", render: "cube", solid: true, opaque: true,
+    tex: { all: "ore_gloamite" }, hardness: 2.4, tool: "pick", minTier: TIER.ferralite, drop: "gloamite", light: 4, lightColor: [0.62, 0.4, 0.9] },
+
+  // Verdanite: a mossy living crystal in the mid-depths. Attuned to growth —
+  // reserved for future farming/alchemy tech (fertiliser, potions, healing).
+  { key: "ore_verdanite", name: "Verdanite Ore", render: "cube", solid: true, opaque: true,
+    tex: { all: "ore_verdanite" }, hardness: 2.2, tool: "pick", minTier: TIER.stone, drop: "verdanite" },
 
   // ---- crafting stations ----
   { key: "workbench", name: "Workbench", render: "cube", solid: true, opaque: true,
@@ -123,6 +137,22 @@ const DEF = [
     // top uses the head (pillow) tile by default; the mesher swaps in the foot
     // (blanket) tile for the foot cell. `foot` is here only so the atlas paints it.
     tex: { top: "bed_head_top", foot: "bed_foot_top", side: "bed_side", bottom: "planks" }, hardness: 0.6, tool: "axe", minTier: 0, drop: "bed" },
+
+  // Soul Anchor: right-click the placed block to attune your spawn point to it
+  // (handled via the `anchor` flag in interact/main). Glows a soft soul-teal.
+  { key: "soul_anchor", name: "Soul Anchor", render: "cube", solid: true, opaque: true, anchor: true,
+    tex: { top: "soul_anchor_top", side: "soul_anchor_side", bottom: "soul_anchor_top" },
+    hardness: 2.5, tool: "pick", minTier: TIER.wood, drop: "soul_anchor", light: 9, lightColor: [0.42, 0.95, 0.88] },
+
+  // Papyrus: a reed that grows 1-3 tall on shores (stamped by worldgen, and
+  // placeable on sand/grass/dirt beside water or on another papyrus — see
+  // interact.tryPlace). Crafts into paper. Not `replaceable`, unlike the
+  // decorative plants, so placing a block at it doesn't silently destroy it.
+  // `stem` is the tile used for segments with more papyrus above (the mesher
+  // picks it so only the top of a clump shows the tufted crown).
+  { key: "papyrus", name: "Papyrus", render: "cross", solid: false, opaque: false,
+    plant: true, plantH: 1.0, plantR: 0.38, shore: true,
+    tex: { all: "papyrus", stem: "papyrus_stem" }, hardness: 0.2, tool: null, minTier: 0, drop: "papyrus" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -152,6 +182,8 @@ for (const s of STONE_FAMILIES) {
 const WOOD_FAMILIES = [
   { id: "pine", name: "Pine" },
   { id: "dusk", name: "Walnut" },
+  { id: "birch", name: "Birch" },
+  { id: "palm", name: "Palm" },
 ];
 for (const wd of WOOD_FAMILIES) {
   DEF.push(
@@ -205,14 +237,15 @@ for (const p of PLANTS) {
 // original keys (saves stay valid); we only add their slabs.
 const BUILD_MATS = [
   { key: "planks", tool: "axe", tier: 0, hardness: 1.0, stair: "plank_stairs" },
-  { key: "pine_planks", tool: "axe", tier: 0, hardness: 1.0 },
-  { key: "dusk_planks", tool: "axe", tier: 0, hardness: 1.0 },
   { key: "greystone", tool: "pick", tier: TIER.wood, hardness: 1.5, stair: "greystone_stairs" },
   { key: "cobbled", tool: "pick", tier: TIER.wood, hardness: 2.0 },
   { key: "polished", tool: "pick", tier: TIER.wood, hardness: 1.6 },
   { key: "bricks", tool: "pick", tier: TIER.wood, hardness: 1.6 },
   { key: "sandstone", tool: "pick", tier: TIER.wood, hardness: 1.2 },
 ];
+for (const wd of WOOD_FAMILIES) {
+  BUILD_MATS.push({ key: `${wd.id}_planks`, tool: "axe", tier: 0, hardness: 1.0 });
+}
 for (const s of STONE_FAMILIES) {
   BUILD_MATS.push(
     { key: `${s.id}stone`, tool: "pick", tier: TIER.wood, hardness: 1.5 },

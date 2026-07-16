@@ -5,11 +5,12 @@
 # Hollowreach — a vibecoded voxel sandbox
 
 A 3D first-person Minecraft-like, built from scratch in the browser: its **own
-WebGL2 voxel engine, procedural world, procedural textures and item models,
-deferred lighting pipeline, sound engine, mob AI, and peer-to-peer
-multiplayer** — all with **zero external libraries**. Mine, smelt, craft, tier
-up tools/armour, build, survive the night, and play with a friend over a
-copy-pasted invite code, all in **persistent, shareable worlds**.
+WebGL2 voxel engine, procedural world with real biomes, procedural textures
+and item models, deferred lighting pipeline, sound engine, mob AI, an in-game
+world atlas, and peer-to-peer multiplayer** — all with **zero external
+libraries**. Mine, smelt, craft, tier up tools/armour, build, chart the map,
+survive the night, and play with a friend over a copy-pasted invite code, all
+in **persistent, shareable worlds**.
 
 <table>
 <tr>
@@ -56,6 +57,8 @@ Chrome, Edge, or Firefox). To stop the server, close its window or press Ctrl+C.
 | Select hotbar | 1–9 / scroll |
 | Inventory | E |
 | Recipe book | R |
+| World map (needs an **Atlas**) | M |
+| Minimap toggle (needs an **Atlas**) | N |
 | Screenshot | F2 |
 | Capture menu panorama | F8 |
 | Pause | Esc |
@@ -92,6 +95,36 @@ and drag across slots to split a held stack evenly; hold **right** and drag to
 drop one per slot. **Scroll** on a slot to nudge single items across. Hover any
 item for its name and stats.
 
+**Biomes:** the overworld is split by temperature and moisture into
+**meadows**, dense **forests**, pale **birch groves**, sandy **deserts** and
+**snowfields**, with **palm trees** on warm beaches and **papyrus** reeds
+growing along shorelines. Mountain ranges rise well above the old hills,
+**ravines** crack the surface open, caves widen into proper caverns the deeper
+you go, and the deepest passages are **flooded** — bring a way back up.
+
+**Buckets & water:** craft a **bucket** from three iron ingots, right-click
+still water to scoop a source, and right-click again to pour it back out
+anywhere — the placed water flows for real, so you can move springs, fill
+moats, or carve waterfalls. An empty bucket used on a **cow** fills with milk.
+
+**The Atlas:** craft it from **3 paper + 1 leather + 1 azurite** (paper comes
+from shoreline **papyrus**) and carry it to unlock cartography. **M** opens a
+fullscreen top-down map — every block is one pixel in its true colour, with
+relief shading and depth-tinted water — that only charts ground you've
+actually explored (the rest stays fogged). Click to drop **waypoints** (rename,
+recolour or delete them in the side panel); they show as floating markers in
+the world with live distances. Dying pins an automatic **death waypoint** where
+you fell (toggle in Settings), and a corner **minimap** (toggle with **N**)
+keeps your surroundings and waypoint headings in view. Lose the Atlas — say, by
+dying with it — and the map goes with it until you get it back.
+
+**Soul Anchor & Wayshard:** the **Soul Anchor** — one of every ore ringing a
+sparkstone — is a placeable block; right-click it to attune your **spawn
+point**, and you'll wake there when you die (breaking it unbinds you). The
+**Wayshard** (gloamite + sparkstone) is a one-use escape rope: use it deep
+underground and it warps you straight up to the surface. Two new deep ores
+power them: violet, faintly glowing **Gloamite** and mossy **Verdanite**.
+
 In water you swim: you sink slowly, hold **Space** to rise (and swim into a
 shore to climb out), or **Left Shift** to dive. Soft blocks (grass, dirt, wood,
 sand) drop when mined by hand — only stone, ores and other hard blocks require
@@ -100,11 +133,14 @@ the right tool tier — and a tool only mines faster for the block class it's
 **Grass creeps**: exposed dirt that's lit and next to grass slowly turns to
 grass over in-game days (so a dug-out patch heals over, and beds let you watch it).
 
-**Animals:** wild **sheep** and **pigs** wander the grass in daylight. Left-click
-to attack (a sword hits hardest). A sheep drops a block of **white wool** (which,
-with planks, crafts a **bed**); a pig drops a **Raw Porkchop** — eat it for a
-little food, or smelt it into a **Cooked Porkchop** that fills more. Both animals
-climb hills and steer clear of water, so they stay on dry land instead of drowning.
+**Animals:** wild **sheep**, **pigs** and **cows** wander the grass in
+daylight. Left-click to attack (a sword hits hardest, and striking **while
+falling lands a critical hit** for 1.5× damage). A sheep drops a block of
+**white wool** (which, with planks, crafts a **bed**); a pig drops a **Raw
+Porkchop**; a cow drops **Raw Beef** and sometimes **Leather** — cook the meats
+in the forge for much better food, and right-click a cow with an empty bucket
+to **milk** it. All of them climb hills and steer clear of water, so they stay
+on dry land instead of drowning.
 
 **Monsters:** **zombies** rise on solid ground after dark. They need genuine
 line of sight to notice you — no seeing through walls — and once they spot you
@@ -147,10 +183,11 @@ stair**. A slab crafts into a **vertical slab** (and back) for thin walls. Each
 **wood type makes its own doors, trapdoors, stairs and slabs**, and any wood's
 planks work for sticks, the workbench, chests, beds and boats (even mixed).
 Ladders, trapdoors and doors place facing you; doors and trapdoors toggle on
-right-click. Beyond Stone and Oak there are two more stone families
-(**Umberstone**, **Slatestone**, each with polished + brick forms) and two more
-woods (**Pine**, **Walnut**) that generate naturally — stone in underground
-blobs, the woods as their own trees. **Torches** angle correctly when set on a
+right-click (and politely refuse to close on anyone standing in the frame).
+Beyond Stone and Oak there are two more stone families (**Umberstone**,
+**Slatestone**, each with polished + brick forms) and four more woods
+(**Pine**, **Walnut**, **Birch**, **Palm**) that generate naturally — stone in
+underground blobs, the woods as their own trees in their own biomes. **Torches** angle correctly when set on a
 wall, and show as a flat sprite in hand and when dropped. **Chests** store 27
 stacks; **forges keep smelting with the UI closed** and both keep their contents
 until you mine them. Out of Coal? **Smelt logs into Charcoal** — it burns and
@@ -177,6 +214,9 @@ durability, armour defense, fuel time).
    pick harvests Diamond).
 5. Craft **Torches** to light caves; build with planks, bricks, polished stone,
    sandstone and glass.
+6. Gather papyrus and leather for an **Atlas**, mine every ore for a **Soul
+   Anchor** to move your spawn, and keep a **Wayshard** in your pocket for the
+   trip back up.
 
 Worlds are saved as plain `.json` files in the **`worlds/` folder** next to
 `run.bat` (the server reads/writes them over a small `/api/world` endpoint).
@@ -219,7 +259,8 @@ Everything is a small ES module under `js/`, grouped by concern:
 
 - `core/` — WebGL context, shaders, matrix math, seeded RNG, input.
 - `world/` — `blocks.js` (the master data table), `noise.js`, `worldgen.js`
-  (terrain/caves/ores/trees), `chunk.js`, `mesher.js`, `lighting.js`,
+  (biomes/terrain/caves/ravines/ores/trees — **versioned**, so old worlds keep
+  generating exactly as they did when created), `chunk.js`, `mesher.js`, `lighting.js`,
   `shapes.js` (non-cube collision/mesh geometry), `water.js` (the flowing-water
   automaton), `world.js` (chunk streaming + GL buffers), `genpool.js` +
   `genworker.js` (threaded gen).
@@ -231,7 +272,7 @@ Everything is a small ES module under `js/`, grouped by concern:
   `interact.js`, `items.js`, `inventory.js`, `recipes.js`, `crafting.js`,
   `blockentities.js` (chest/forge state), `entities/` (entity framework:
   `registry.js`, `manager.js`, one def per kind — `drop.js`, `boat.js`,
-  `sheep.js`, `pig.js`, `zombie.js` — a shared movement brain in `ai.js`, and an
+  `sheep.js`, `pig.js`, `cow.js`, `zombie.js` — a shared movement brain in `ai.js`, and an
   `ai/` subfolder — `path.js`, `senses.js`, `fsm.js`, `steering.js`,
   `services.js` — a pathfinding/perception/state-machine backend most mobs
   today only lean on part of).
@@ -241,7 +282,8 @@ Everything is a small ES module under `js/`, grouped by concern:
 - `audio/` — `engine.js` (Web Audio buses/mixing), `sfx.js`, `ambience.js`,
   `director.js` (hooks sound into gameplay events).
 - `ui/` — `menu.js`, `hud.js`, `inventoryui.js`, `recipebook.js`, `settings.js`,
-  `notify.js`, `mpui.js` (multiplayer host/join panels + player nameplates).
+  `notify.js`, `mpui.js` (multiplayer host/join panels + player nameplates),
+  `map.js` (the Atlas: world map, waypoints, minimap).
 - `save/` — `serialize.js`, `storage.js`, `migrate.js`, `transfer.js`,
   `gallery.js` (screenshot/panorama gallery).
 
@@ -255,7 +297,7 @@ into your inventory the moment there's room (so mining feels instant) and only
 lingering physically when it's full. The **boat** (`boat.js`) is the first
 *rideable*: it floats on water via a buoyancy spring, carries the player in its
 seat, steers toward your look direction, and breaks back into an item.
-**Sheep, pigs and zombies** use the same `update`/`onInteract`/health hooks the
+**Sheep, pigs, cows and zombies** use the same `update`/`onInteract`/health hooks the
 framework always had room for, plus the shared `ai.js` brain for hill-climbing
 and water-avoidance; the zombie additionally uses true line-of-sight and
 budgeted A* pathfinding (`entities/ai/senses.js`, `path.js`) instead of
@@ -295,13 +337,14 @@ pattern is the intended home for future threaded lighting / mob AI.
 
 ## Deliberately deferred (foundation already in place)
 
-More mob types & deeper combat variety (sheep, pigs and zombies are in, and
-the zombie already has real line-of-sight and pathfinding), farming/crops
-(hunger, eating and cooking are in — planting and growing isn't), multiple
-biomes, Web-Worker *meshing* specifically (generation is already threaded;
-lighting and meshing are still main-thread, just frame-budgeted), greedy
-meshing, fully smooth (non-voxel) global lighting, and two mineable "future
-tech" materials with no recipes yet (**Sparkstone**, **Azurite**).
+More mob types & deeper combat variety (sheep, pigs, cows and zombies are in,
+and the zombie already has real line-of-sight and pathfinding), farming/crops
+(hunger, eating, milk and cooking are in — planting and growing isn't),
+Web-Worker *meshing* specifically (generation is already threaded; lighting
+and meshing are still main-thread, just frame-budgeted), greedy meshing, fully
+smooth (non-voxel) global lighting, and future uses for the newest ores —
+**Gloamite** is earmarked for more teleport/void tech beyond the Wayshard, and
+**Verdanite** for growth and alchemy once farming lands.
 
 The health + fall-damage system is wired in (toggle in Settings) as the seed for a
 future full survival mode — armour defense already feeds it.

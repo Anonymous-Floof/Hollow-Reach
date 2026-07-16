@@ -392,6 +392,27 @@ PAINTERS.dusk_log_top = logTopTex("#6a5236");
 PAINTERS.dusk_log_side = logSideTex("#4a3a2c");
 PAINTERS.pine_leaves = leavesTex("#7a9a4a", "#6a8a3e");
 PAINTERS.dusk_leaves = leavesTex("#3a5a3a", "#2e4a2e");
+PAINTERS.birch_planks = plankTex("#d8c9a2", "#b3a276");
+PAINTERS.birch_log_top = logTopTex("#d9cfae");
+// Birch bark: chalk-white with the characteristic dark horizontal scores.
+PAINTERS.birch_log_side = (ctx, ox, oy, rng) => {
+  noisy(ctx, ox, oy, "#e4dfd2", 8, rng);
+  for (let i = 0; i < 9; i++) {
+    const y = (rng() * TILE) | 0, x = (rng() * TILE) | 0, w = 2 + ((rng() * 3) | 0);
+    for (let k = 0; k < w; k++) px(ctx, ox, oy, (x + k) % TILE, y, 52, 48, 42);
+  }
+};
+PAINTERS.birch_leaves = leavesTex("#8fb055", "#7a9c44");
+PAINTERS.palm_planks = plankTex("#c9a06a", "#a37c46");
+PAINTERS.palm_log_top = logTopTex("#c2a06a");
+// Palm trunk: stacked frond-scar rings instead of vertical grain.
+PAINTERS.palm_log_side = (ctx, ox, oy, rng) => {
+  noisy(ctx, ox, oy, "#a3855a", 10, rng);
+  for (let y = 2; y < TILE; y += 4) {
+    for (let x = 0; x < TILE; x++) { px(ctx, ox, oy, x, y, 130, 104, 66); if (rng() < 0.5) px(ctx, ox, oy, x, y + 1, 148, 120, 78); }
+  }
+};
+PAINTERS.palm_leaves = leavesTex("#4fae4a", "#3f9440");
 
 // Wood doors/trapdoors: the wood's planks plus a frame, bevelled panels and
 // hardware. The bevel (dark top/left, light bottom/right) makes panels read as
@@ -448,6 +469,73 @@ PAINTERS.pine_door = doorTex("#c2a05a", "#7a5e2e");
 PAINTERS.dusk_door = doorTex("#5a4634", "#33271a");
 PAINTERS.pine_trapdoor = trapdoorTex("#c2a05a", "#7a5e2e");
 PAINTERS.dusk_trapdoor = trapdoorTex("#5a4634", "#33271a");
+PAINTERS.birch_door = doorTex("#d8c9a2", "#8f8058");
+PAINTERS.palm_door = doorTex("#c9a06a", "#7c5c32");
+PAINTERS.birch_trapdoor = trapdoorTex("#d8c9a2", "#8f8058");
+PAINTERS.palm_trapdoor = trapdoorTex("#c9a06a", "#7c5c32");
+
+// Snowy grass: a clean snow cap over the usual dirt side.
+PAINTERS.snow_top = (ctx, ox, oy, rng) => {
+  noisy(ctx, ox, oy, "#eef2f6", 6, rng);
+  blobs(ctx, ox, oy, "#dde6ee", 8, rng, 1);
+};
+PAINTERS.snowturf_side = (ctx, ox, oy, rng) => {
+  noisy(ctx, ox, oy, "#6b4b32", 20, rng);
+  for (let x = 0; x < TILE; x++) {
+    const h = 3 + (rng() < 0.5 ? 1 : 0);
+    for (let y = 0; y < h; y++) { const j = (rng() * 2 - 1) * 8; px(ctx, ox, oy, x, y, 236 + j, 240 + j, 246 + j); }
+  }
+};
+
+// Soul Anchor: night-dark stone shot through with a glowing soul-teal core.
+PAINTERS.soul_anchor_top = (ctx, ox, oy, rng) => {
+  noisy(ctx, ox, oy, "#2c2f3a", 10, rng);
+  for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+    const d = Math.hypot(x - 7.5, y - 7.5);
+    if (d < 2.4) px(ctx, ox, oy, x, y, 150, 240, 226);                 // hot core
+    else if (d < 4.2 && rng() < 0.8) px(ctx, ox, oy, x, y, 74, 178, 168);
+    else if (Math.abs(d - 6.2) < 0.7) px(ctx, ox, oy, x, y, 52, 118, 116);  // faint ring
+  }
+  for (let i = 0; i < TILE; i++) { px(ctx, ox, oy, i, 0, 60, 64, 78); px(ctx, ox, oy, 0, i, 60, 64, 78); }
+};
+PAINTERS.soul_anchor_side = (ctx, ox, oy, rng) => {
+  noisy(ctx, ox, oy, "#2c2f3a", 10, rng);
+  for (let i = 0; i < TILE; i++) { px(ctx, ox, oy, i, 0, 66, 70, 84); px(ctx, ox, oy, i, 15, 22, 24, 30); }
+  // a rune-etched channel bleeding light up the face
+  for (let y = 3; y <= 13; y++) {
+    px(ctx, ox, oy, 7, y, 74, 190, 178); px(ctx, ox, oy, 8, y, 96, 214, 200);
+    if (y % 3 === 0) { px(ctx, ox, oy, 6, y, 58, 142, 136); px(ctx, ox, oy, 9, y, 58, 142, 136); }
+  }
+  px(ctx, ox, oy, 7, 2, 150, 240, 226); px(ctx, ox, oy, 8, 2, 150, 240, 226);
+};
+
+// Papyrus: a clutch of tall reeds. Two tiles that share the SAME stem columns
+// so stacked segments read as continuous reeds: `papyrus_stem` runs every stem
+// the full tile height (used for segments with more papyrus above — see the
+// mesher's emitPlant), and `papyrus` (the top segment) carries the stems up to
+// feathered umbels at the tips.
+const PAPYRUS_STEMS = [[4, 3], [7, 1], [10, 4], [12, 6]];   // [x, crown y on the top tile]
+function papyrusStemPx(ctx, ox, oy, rng, sx, y) {
+  const g = 120 + (rng() * 2 - 1) * 16;
+  px(ctx, ox, oy, sx, y, 106, g + 30, 66);
+  if ((y + sx) % 5 === 0) px(ctx, ox, oy, sx, y, 84, 118, 52);   // stem node ring
+  if (rng() < 0.2) px(ctx, ox, oy, sx + 1, y, 88, g + 12, 54);
+}
+PAINTERS.papyrus_stem = (ctx, ox, oy, rng) => {
+  for (const [sx] of PAPYRUS_STEMS) {
+    for (let y = 0; y < TILE; y++) papyrusStemPx(ctx, ox, oy, rng, sx, y);
+  }
+};
+PAINTERS.papyrus = (ctx, ox, oy, rng) => {
+  for (const [sx, top] of PAPYRUS_STEMS) {
+    for (let y = top; y < TILE; y++) papyrusStemPx(ctx, ox, oy, rng, sx, y);
+    // umbel: a little starburst of lighter fronds at the tip
+    for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-2, 0], [2, 0], [-1, 0], [1, 0], [0, -2]]) {
+      const yy = top + dy, xx = sx + dx;
+      if (yy >= 0 && xx >= 0 && xx < TILE) px(ctx, ox, oy, xx, yy, 150, 190, 96);
+    }
+  }
+};
 
 // Ore painters: greystone base + coloured flecks.
 function oreTexture(color, count) {
@@ -463,6 +551,8 @@ PAINTERS.ore_sunbrass = oreTexture("#e8c64a", 8);
 PAINTERS.ore_aetherite = oreTexture("#46d8c4", 8);
 PAINTERS.ore_sparkstone = oreTexture("#e0432f", 9);
 PAINTERS.ore_azurite = oreTexture("#2f6fe0", 9);
+PAINTERS.ore_gloamite = oreTexture("#8a52e8", 8);
+PAINTERS.ore_verdanite = oreTexture("#46b558", 9);
 
 // ---------- plants & greebles (cross sprites, transparent background) ----------
 // These paint onto the tile's transparent canvas leaving gaps -> a cutout X

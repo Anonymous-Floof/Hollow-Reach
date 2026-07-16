@@ -26,6 +26,7 @@
       </div>
       <div id="held-item-label"></div>
       <div id="debug" class="hidden"></div>
+      <canvas id="minimap" class="hidden"></canvas>
     </div>
 
     <!-- Main menu / world select / about -->
@@ -74,6 +75,12 @@
         <div id="recipebook-root"></div>
         <div class="row end"><button id="recipebook-back" class="btn small">Close</button></div>
       </div>
+    </div>
+
+    <!-- The Atlas: fullscreen world map -->
+    <div id="map" class="screen hidden">
+      <canvas id="map-canvas"></canvas>
+      <div id="map-side"></div>
     </div>
 
     <!-- Screenshot / panorama gallery -->

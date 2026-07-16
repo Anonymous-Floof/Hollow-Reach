@@ -24,6 +24,13 @@ export function serialize(world, player, inventory, meta) {
     id: meta.id,
     name: meta.name,
     seed: world.seed,
+    genVersion: world.genVer || 1,
+    // player-set spawn point (Soul Anchor) — absent means "derive the default"
+    spawn: meta.spawn || undefined,
+    // atlas map waypoints (custom + death markers)
+    waypoints: meta.waypoints && meta.waypoints.length ? meta.waypoints : undefined,
+    // chunks ever generated — the atlas only maps explored ground (fog of war)
+    explored: world.explored && world.explored.size ? [...world.explored] : undefined,
     createdAt: meta.createdAt || Date.now(),
     savedAt: Date.now(),
     player: player.toJSON(),

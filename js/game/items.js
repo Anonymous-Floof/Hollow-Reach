@@ -29,15 +29,23 @@ const MATERIALS = [
   { key: "aetherite", name: "Diamond", color: "#46d8c4", iconKind: "gem" },
   { key: "sparkstone", name: "Sparkstone", color: "#e0432f", iconKind: "shard" },
   { key: "azurite", name: "Azurite", color: "#2f6fe0", iconKind: "shard" },
+  { key: "gloamite", name: "Gloamite", color: "#8a52e8", iconKind: "shard" },
+  { key: "verdanite", name: "Verdanite", color: "#46b558", iconKind: "shard" },
+  { key: "leather", name: "Leather", color: "#9a6a3c", iconKind: "leather" },
+  { key: "paper", name: "Paper", color: "#ece7d4", iconKind: "paper" },
 ];
 for (const m of MATERIALS) add({ ...m, type: "material" });
 
 // ---- foods (right-click to eat; `food` = hunger points restored) ----
 // `risky` foods gamble on eat (see player.eat): rotten flesh might feed or sicken.
+// `food` is in hunger POINTS on the 20-point bar (1 pip = 2 points), so a
+// cooked meal visibly fills pips. Values echo Minecraft's (porkchop/steak = 8).
 const FOODS = [
-  { key: "pork_raw", name: "Raw Porkchop", color: "#e08a90", iconKind: "meat", food: 1 },
-  { key: "pork_cooked", name: "Cooked Porkchop", color: "#b06a3c", iconKind: "meat", food: 3 },
-  { key: "rotten_flesh", name: "Rotten Flesh", color: "#7a8c4e", iconKind: "flesh", food: 1, risky: true },
+  { key: "pork_raw", name: "Raw Porkchop", color: "#e08a90", iconKind: "meat", food: 3 },
+  { key: "pork_cooked", name: "Cooked Porkchop", color: "#b06a3c", iconKind: "meat", food: 8 },
+  { key: "beef_raw", name: "Raw Beef", color: "#c4525a", iconKind: "steak", food: 3 },
+  { key: "beef_cooked", name: "Steak", color: "#8a4a2c", iconKind: "steak", food: 8 },
+  { key: "rotten_flesh", name: "Rotten Flesh", color: "#7a8c4e", iconKind: "flesh", food: 2, risky: true },
 ];
 for (const f of FOODS) add({ ...f, type: "food" });
 
@@ -46,18 +54,31 @@ for (const f of FOODS) add({ ...f, type: "food" });
 // burned like other wooden things.
 add({ key: "boat", name: "Oak Boat", type: "boat", maxStack: 1, color: "#8a6a3a", iconKind: "boat", fuel: 12 });
 
+// Buckets: the empty one scoops still water (or milks a cow); the filled ones
+// place/pour back. `fill` tints the icon's contents.
+add({ key: "bucket", name: "Bucket", type: "bucket", maxStack: 16, color: "#b8bcc4", iconKind: "bucket" });
+add({ key: "water_bucket", name: "Water Bucket", type: "bucket", holds: "water", maxStack: 1, color: "#b8bcc4", fill: "#3f77d9", iconKind: "bucket" });
+add({ key: "milk_bucket", name: "Milk Bucket", type: "bucket", holds: "milk", maxStack: 1, color: "#b8bcc4", fill: "#f0eee6", iconKind: "bucket" });
+
+// The Atlas: carrying it unlocks the world map (M), waypoints and the minimap.
+add({ key: "atlas", name: "Atlas", type: "atlas", maxStack: 1, color: "#8a5a34", iconKind: "atlas" });
+
+// Wayshard: a sliver of gloamite tuned to the open sky. Use it (right-click) to
+// warp to the surface above you — consumed on use.
+add({ key: "wayshard", name: "Wayshard", type: "warp", maxStack: 16, color: "#9a6ae8", iconKind: "wayshard" });
+
 // ---- tools ----
 // Each tier references the crafting material item it is built from.
 // `speed` is the mining-speed multiplier applied only when using the correct
 // tool type, and is shared across pick/axe/shovel/sword at a tier so they all
 // progress consistently. Kept moderate so mining feels deliberate.
 export const TOOL_MATS = [
-  { id: "wood",      name: "Wooden", tier: TIER.wood,      item: "planks",          color: "#b08a52", speed: 2,   dura: 60 },
-  { id: "stone",     name: "Stone",  tier: TIER.stone,     item: "cobbled",         color: "#7d8189", speed: 3,   dura: 130 },
-  { id: "copper",    name: "Copper", tier: TIER.copper,    item: "copper_ingot",    color: "#c8783a", speed: 4.5, dura: 200 },
-  { id: "ferralite", name: "Iron",   tier: TIER.ferralite, item: "ferralite_ingot", color: "#cfd2d6", speed: 6,   dura: 360 },
-  { id: "sunbrass",  name: "Golden", tier: TIER.sunbrass,  item: "sunbrass_ingot",  color: "#e8c64a", speed: 9,   dura: 90 },
-  { id: "aetherite", name: "Diamond", tier: TIER.aetherite, item: "aetherite",      color: "#46d8c4", speed: 8,   dura: 820 },
+  { id: "wood",      name: "Wooden", tier: TIER.wood,      item: "planks",          color: "#b08a52", speed: 1.7, dura: 60 },
+  { id: "stone",     name: "Stone",  tier: TIER.stone,     item: "cobbled",         color: "#7d8189", speed: 2.4, dura: 130 },
+  { id: "copper",    name: "Copper", tier: TIER.copper,    item: "copper_ingot",    color: "#c8783a", speed: 3.2, dura: 200 },
+  { id: "ferralite", name: "Iron",   tier: TIER.ferralite, item: "ferralite_ingot", color: "#cfd2d6", speed: 4.2, dura: 360 },
+  { id: "sunbrass",  name: "Golden", tier: TIER.sunbrass,  item: "sunbrass_ingot",  color: "#e8c64a", speed: 6.5, dura: 90 },
+  { id: "aetherite", name: "Diamond", tier: TIER.aetherite, item: "aetherite",      color: "#46d8c4", speed: 5.2, dura: 820 },
 ];
 const TOOL_TYPES = [
   { type: "pick", name: "Pickaxe", iconKind: "pick" },
@@ -109,9 +130,19 @@ export function itemTooltip(key, opts = {}) {
   const it = ITEMS[key];
   if (!it) return { name: key, sub: [] };
   const sub = [];
-  if (it.type === "tool") { sub.push(`${it.toolType} · tier ${it.tier}`); sub.push(`mining speed ×${it.speed}`); }
+  if (it.type === "tool") {
+    sub.push(`${it.toolType} · tier ${it.tier}`);
+    // swords are weapons: show attack damage (see ai.attackDamage), not dig speed
+    if (it.toolType === "sword") sub.push(`attack: ${3 + it.tier} damage`);
+    else sub.push(`mining speed ×${it.speed}`);
+  }
   if (it.type === "armor") sub.push(`+${it.defense} defense`);
-  if (it.type === "food") sub.push(it.risky ? `food: a gamble (+1 or −2)` : `food: +${it.food} hunger`);
+  if (it.type === "food") sub.push(it.risky
+    ? `food: a gamble (+${it.food} or −${it.food} hunger)`
+    : `food: +${it.food} hunger (${it.food / 2} pips)`);
+  if (it.type === "warp") sub.push("use: warp to the surface above you");
+  if (it.type === "atlas") sub.push("carry it: world map (M) · minimap (N)");
+  if (it.key === "bucket") sub.push("scoops still water · milks cows");
   const md = maxDurability(key);
   if (md) { const d = opts.dura !== undefined ? opts.dura : md; sub.push(`${d}/${md} durability`); }
   if (opts.fuel > 0) sub.push(`forge fuel · ${opts.fuel}s`);
@@ -314,6 +345,73 @@ const SPRITES = {
       if ((x * 3 + y * 5) % 11 === 0) continue;               // rot holes
       pset(g, x, y, (x * 7 + y * 3) % 9 < 3 ? b : (x + y) % 4 === 0 ? d : m);
     }
+  },
+
+  paper(g) {
+    const P = "#ece7d4", S = "#cfc8ae", L = "#8f886e";
+    for (let y = 2; y <= 13; y++) prow(g, 4, 11, y, P);
+    for (let y = 2; y <= 13; y++) pset(g, 11, y, S);       // shaded right edge
+    prow(g, 4, 11, 13, S);
+    pset(g, 11, 2, S); pset(g, 10, 2, S); pset(g, 11, 3, S);  // dog-eared corner
+    for (const y of [5, 8, 11]) prow(g, 6, 9, y, L);          // faint script lines
+  },
+
+  leather(g, col) {
+    const M = shade(col, 1.25), m = col, d = shade(col, 0.62);
+    // a tanned hide: irregular blob with darker crinkled edges
+    for (let y = 3; y <= 12; y++) for (let x = 3; x <= 12; x++) {
+      if ((x === 3 || x === 12) && (y < 5 || y > 10)) continue;
+      if ((y === 3 || y === 12) && (x < 5 || x > 10)) continue;
+      pset(g, x, y, (x + y * 3) % 7 === 0 ? d : m);
+    }
+    pset(g, 5, 4, M); pset(g, 6, 4, M); pset(g, 4, 6, M);   // worn sheen
+    pset(g, 7, 8, d); pset(g, 9, 6, d); pset(g, 6, 10, d);  // crease marks
+  },
+
+  steak(g, col) {
+    const M = shade(col, 1.35), m = col, d = shade(col, 0.66), F = "#e8dcc0";
+    // a thick-cut slab with a fat rind along the top edge
+    for (let y = 4; y <= 12; y++) for (let x = 3; x <= 13; x++) {
+      const v = ((x - 8) / 5.4) ** 2 + ((y - 8) / 4.6) ** 2;
+      if (v > 1) continue;
+      pset(g, x, y, v > 0.62 && (x > 9 || y > 9) ? d : m);
+    }
+    for (const [x, y] of [[5, 4], [6, 4], [7, 4], [8, 4], [9, 4], [4, 5], [10, 4]]) pset(g, x, y, F);
+    for (const [x, y] of [[6, 6], [7, 7], [8, 8], [6, 9]]) pset(g, x, y, M);   // sear marks
+  },
+
+  bucket(g, col, item) {
+    const M = shade(col, 1.35), m = col, d = shade(col, 0.6);
+    // handle arc
+    for (const [x, y] of [[5, 3], [6, 2], [7, 2], [8, 2], [9, 2], [10, 3]]) pset(g, x, y, d);
+    // tapering pail
+    prow(g, 4, 11, 5, M);
+    for (let y = 6; y <= 11; y++) { const inz = (y - 6) >> 1; prow(g, 4 + inz, 11 - inz, y, m); }
+    prow(g, 6, 9, 12, d);
+    pcol(g, 4, 6, 9, M); pcol(g, 11, 6, 9, d);
+    // contents peeking over the rim
+    if (item && item.fill) { const F = item.fill; prow(g, 5, 10, 5, F); prow(g, 5, 10, 4, shade(F, 1.15)); }
+  },
+
+  atlas(g, col) {
+    const C = col, Cd = shade(col, 0.62), P = "#e8e2cc", A = "#3f77d9", G = "#c8a23a";
+    // a stout leather-bound tome, pages on the right, a compass-rose clasp
+    for (let y = 2; y <= 13; y++) prow(g, 3, 11, y, C);
+    pcol(g, 3, 2, 13, Cd);                          // spine
+    for (let y = 3; y <= 12; y++) { pset(g, 12, y, P); pset(g, 13, y, shade(P, 0.8)); }  // page block
+    prow(g, 3, 11, 13, Cd);
+    pcol(g, 7, 2, 13, G);                           // gilt band
+    pset(g, 9, 6, G); pset(g, 9, 8, G); pset(g, 8, 7, G); pset(g, 10, 7, G);  // rose points
+    pset(g, 9, 7, A);                               // compass jewel
+  },
+
+  wayshard(g, col) {
+    const M = shade(col, 1.5), m = col, d = shade(col, 0.55), W = "#f2ecff";
+    // a rising sliver with motes streaming skyward off its tip
+    pset(g, 8, 2, W); pset(g, 6, 4, M); pset(g, 10, 5, M);        // motes
+    for (let i = 0; i < 8; i++) { pset(g, 7, 5 + i, M); pset(g, 8, 5 + i, m); pset(g, 9, 6 + i, d); }
+    pset(g, 8, 4, M);
+    prow(g, 6, 10, 13, d);                                        // base chips
   },
 
   armor_helmet(g, col) {

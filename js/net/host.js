@@ -165,6 +165,7 @@ export class NetHost {
     const payload = JSON.stringify({
       name: (g.meta && g.meta.name || "World").slice(0, 28),
       seed: world.seed >>> 0,
+      genVer: world.genVer || 1,
       time: g.sky.time,
       spawn,
       edits,
@@ -273,7 +274,7 @@ export class NetHost {
     def.hooks.onInteract(e, ctx, "left");
     const vpos = [e.pos[0], e.pos[1] + e.h * 0.7, e.pos[2]];
     this._relaySfx("thwack", vpos);
-    if (e.type === "sheep" || e.type === "pig" || e.type === "zombie") {
+    if (e.type === "sheep" || e.type === "pig" || e.type === "cow" || e.type === "zombie") {
       this._relaySfx(`${e.type}_${e.dead ? "death" : "hurt"}`, vpos);
     }
   }
@@ -529,7 +530,7 @@ export class NetHost {
     if (!victim || !victim.lastPose) return;
     const hp = this.game.player;
     if (dist3(hp.pos, victim.lastPose) > HIT_REACH) return;
-    const dmg = attackDamage(this.game.inventory);
+    const dmg = attackDamage(this.game.inventory, this.game.player);   // host PvP swings can crit
     const l = Math.hypot(victim.lastPose[0] - hp.pos[0], victim.lastPose[2] - hp.pos[2]) || 1;
     const kb = [(victim.lastPose[0] - hp.pos[0]) / l * 4, 3, (victim.lastPose[2] - hp.pos[2]) / l * 4];
     victim.peer.send("dmg", { amount: dmg, kb });

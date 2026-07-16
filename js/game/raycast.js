@@ -5,7 +5,8 @@ import { getBlock } from "../world/blocks.js";
 
 // Returns null or { x, y, z, nx, ny, nz } where (x,y,z) is the hit block and
 // (nx,ny,nz) is the empty neighbour cell on the near side (placement target).
-export function raycast(world, origin, dir, maxDist = 6) {
+// `hitLiquid` makes the ray stop on water too (bucket scooping/pouring).
+export function raycast(world, origin, dir, maxDist = 6, hitLiquid = false) {
   let x = Math.floor(origin[0]), y = Math.floor(origin[1]), z = Math.floor(origin[2]);
   const stepX = Math.sign(dir[0]), stepY = Math.sign(dir[1]), stepZ = Math.sign(dir[2]);
 
@@ -23,7 +24,7 @@ export function raycast(world, origin, dir, maxDist = 6) {
   while (t <= maxDist) {
     const id = world.getBlock(x, y, z);
     const b = getBlock(id);
-    if (id !== 0 && b.render !== "liquid") {
+    if (id !== 0 && (hitLiquid || b.render !== "liquid")) {
       // contact point on the entered face (lets placement read where on the face
       // the cursor landed — e.g. upper vs lower half for slabs/stairs).
       return {

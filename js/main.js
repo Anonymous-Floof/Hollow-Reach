@@ -31,6 +31,7 @@ import { NetHost } from "./net/host.js";
 import { NetClient } from "./net/client.js";
 import { localPlayerId, getPlayerName } from "./net/protocol.js";
 import { Nameplates } from "./ui/mpui.js";
+import { WorldMap } from "./ui/map.js";
 
 const SPAWN_XZ = [8.5, 8.5];
 
@@ -53,6 +54,8 @@ class Game {
     this.input = new Input(this.canvas);
     this.sky = new Sky();
     this.hud = new HUD();
+    this.map = new WorldMap(this, this.atlas);   // the Atlas: world map/minimap/waypoints
+    this.waypoints = [];
     initNotify();
 
     this.state = "menu";
@@ -200,7 +203,7 @@ class Game {
   }
 
   showScreen(name) {
-    for (const id of ["menu", "pause", "settings", "inventory", "gallery"]) {
+    for (const id of ["menu", "pause", "settings", "inventory", "gallery", "map"]) {
       document.getElementById(id).classList.toggle("hidden", id !== name && name !== "playing");
       if (name === "playing") document.getElementById(id).classList.add("hidden");
     }
@@ -211,6 +214,7 @@ class Game {
   startNew({ name, seed }) {
     this.meta = { id: newId(), name, createdAt: Date.now() };
     this.remotePlayersStore = {};
+    this.waypoints = [];
     this.world = new World(this.gl, this.atlas, seed, Settings.get("renderDistance"));
     this.inventory = new Inventory();
     this.invUI.inv = this.inventory;
@@ -227,7 +231,11 @@ class Game {
   loadWorld(save) {
     this.meta = { id: save.id || newId(), name: save.name, createdAt: save.createdAt || Date.now() };
     this.remotePlayersStore = save.remotePlayers || {};
-    this.world = new World(this.gl, this.atlas, save.seed, Settings.get("renderDistance"));
+    this.waypoints = Array.isArray(save.waypoints) ? save.waypoints : [];
+    // worlds carry the generator version they were created with (missing = v1),
+    // so terrain keeps generating exactly as it did when the world was born
+    this.world = new World(this.gl, this.atlas, save.seed, Settings.get("renderDistance"), save.genVersion || 1);
+    if (Array.isArray(save.explored)) for (const k of save.explored) this.world.explored.add(k);
     this.world.edits = deserializeEdits(save);
     this.world.blockEntities = deserializeBlockEntities(save);
     this.world.entities.load(save.entities);
@@ -236,7 +244,9 @@ class Game {
     this.sky.time = save.time ?? 0.32;
     this.player = new Player(SPAWN_XZ[0], 80, SPAWN_XZ[1]);
     this.player.loadJSON(save.player);
-    this.spawn = [SPAWN_XZ[0], this.world.spawnHeight(SPAWN_XZ[0] | 0, SPAWN_XZ[1] | 0), SPAWN_XZ[1]];
+    this.spawn = Array.isArray(save.spawn) && save.spawn.length === 3
+      ? save.spawn.slice()
+      : [SPAWN_XZ[0], this.world.spawnHeight(SPAWN_XZ[0] | 0, SPAWN_XZ[1] | 0), SPAWN_XZ[1]];
     this.world.primeSpawn(this.player.pos[0], this.player.pos[2]);
     this.enterPlay();
     notify(`Loaded ${save.name}`);
@@ -389,7 +399,7 @@ class Game {
     const remotePlayers = this.net && this.net.isHost
       ? this.net.remotePlayersForSave() : this.remotePlayersStore;
     return serialize(this.world, this.player, this.inventory,
-      { ...this.meta, time: this.sky.time, remotePlayers });
+      { ...this.meta, time: this.sky.time, remotePlayers, spawn: this.spawn, waypoints: this.waypoints });
   }
   saveCurrent() {
     // NEVER persist a world we joined as a guest — it belongs to the host.
@@ -414,6 +424,8 @@ class Game {
     try { navigator.keyboard?.unlock?.(); } catch { /* unsupported */ }
     if (this.world) this.world.dispose();
     this.world = this.player = this.inventory = null;
+    this.waypoints = [];
+    this.map.reset();
     this.nameplates.clear();
     this.state = "menu";
     this.menu.showMain();
@@ -450,7 +462,8 @@ class Game {
     this.net = client;
     this.meta = { id: null, name: payload.name, remote: true };
     this.remotePlayersStore = {};
-    this.world = new World(this.gl, this.atlas, payload.seed, Settings.get("renderDistance"));
+    this.waypoints = [];
+    this.world = new World(this.gl, this.atlas, payload.seed, Settings.get("renderDistance"), payload.genVer || 1);
     this.world.edits = deserializeEdits({ edits: payload.edits });
     this.world.blockEntities = deserializeBlockEntities({ blockEntities: payload.blockEntities });
     this.inventory = payload.inventory ? Inventory.fromJSON(payload.inventory) : new Inventory();
@@ -478,6 +491,8 @@ class Game {
         try { navigator.keyboard?.unlock?.(); } catch { /* unsupported */ }
         this.world.dispose();
         this.world = this.player = this.inventory = null;
+        this.waypoints = [];
+        this.map.reset();
         this.nameplates.clear();
         this.state = "menu";
         this.menu.showMain();
@@ -522,8 +537,12 @@ class Game {
     else if (this.world && this.net) this.updateNetIdle(dt);
     else if (this.state === "inventory") { if (this.world) this.world.tickBlockEntities(dt); this.invUI.tick(dt); }
 
+    if (this.state === "map") this.map.update(dt);   // the fullscreen atlas redraw
+
     if (this.world) this.renderFrame();
     else this.renderMenuScene(dt);
+
+    if (this.world && this.player) this.map.tickHud(dt, this.camera);   // minimap + waypoint markers
 
     // Captures run right after this frame's render (same JS turn) so a screenshot
     // reads exactly what was drawn. A panorama re-renders the normal frame after,
@@ -535,12 +554,21 @@ class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
 
-  // Single source of truth for Esc / E / R across every state.
+  // Single source of truth for Esc / E / R / M across every state.
   handleGlobalKeys() {
     const input = this.input;
 
+    // Never steal letters from a focused text field (waypoint names, world
+    // name…). Escape still works so you can always back out.
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) {
+      if (input.pressed("Escape")) ae.blur();
+      return;
+    }
+
     if (input.pressed("Escape")) {
       if (this.state === "recipebook") this.closeRecipeBook();
+      else if (this.state === "map") this.closeMap();
       else if (this.state === "gallery") this.closeGallery();
       else if (this.state === "inventory") this.closeInventory();
       else if (this.state === "settings") this.closeSettings();
@@ -563,7 +591,29 @@ class Game {
     if (input.pressed("KeyR")) {
       if (this.state === "playing" || this.state === "inventory") this.openRecipeBook();
       else if (this.state === "recipebook") this.closeRecipeBook();
+      return;
     }
+
+    // M: the Atlas world map (needs the Atlas item in your inventory)
+    if (input.pressed("KeyM")) {
+      if (this.state === "playing") this.openMap();
+      else if (this.state === "map") this.closeMap();
+    }
+  }
+
+  openMap() {
+    if (!this.world) return;
+    if (!this.map.hasAtlas()) { notify("You need an Atlas (3 paper + 1 leather + 1 azurite)"); return; }
+    this.state = "map";
+    this.input.exitLock();
+    this.map.open();
+    this.showScreen("map");
+  }
+  closeMap() {
+    this.map.close();
+    this.state = "playing";
+    this.showScreen("playing");
+    this.input.requestLock();
   }
 
   updatePlaying(dt) {
@@ -572,6 +622,10 @@ class Game {
     if (input.pressed("F3")) this.hud.toggleDebug();
     if (input.pressed("F2")) this._shotQueued = true;    // screenshot -> gallery
     if (input.pressed("F8")) this._panoQueued = true;    // panorama -> gallery
+    if (input.pressed("KeyN")) {                          // minimap toggle
+      Settings.set("minimap", !Settings.get("minimap"));
+      notify(Settings.get("minimap") ? "Minimap on" : "Minimap off");
+    }
     if (input.pressed("KeyQ")) this.dropSelected(input.down("ControlLeft"));
 
     for (let i = 0; i < 9; i++) if (input.pressed("Digit" + (i + 1))) this.inventory.selected = i;
@@ -613,6 +667,9 @@ class Game {
       onOpenStation: (st, x, y, z) => this.openStation(st, x, y, z),
       onSleep: () => this.trySleep(),
       onEat: (item) => { const ok = this.player.eat(item); if (ok) sfx.eat(); return ok; },
+      onSetSpawn: (x, y, z) => this.attuneAnchor(x, y, z),
+      onAnchorBroken: (x, y, z) => this.anchorBroken(x, y, z),
+      onWarp: () => this.useWayshard(),
       notify,
       net: this.net,
     });
@@ -632,10 +689,12 @@ class Game {
       const df = this.sky.dayFactor();
       this.world.trySpawnSheep(this.player.pos[0], this.player.pos[2], df);
       this.world.trySpawnPig(this.player.pos[0], this.player.pos[2], df);
+      this.world.trySpawnCow(this.player.pos[0], this.player.pos[2], df);
       // hosts also populate around remote players, so mobs exist out there too
       if (isHost) for (const c of this.net.remoteCenters()) {
         this.world.trySpawnSheep(c[0], c[1], df);
         this.world.trySpawnPig(c[0], c[1], df);
+        this.world.trySpawnCow(c[0], c[1], df);
       }
     }
 
@@ -686,9 +745,54 @@ class Game {
     if (this.player.health <= 0) this.respawn();
   }
 
+  // ---------- soul anchor & wayshard ----------
+  attuneAnchor(x, y, z) {
+    this.spawn = [x + 0.5, y + 1, z + 0.5];
+    sfx.craft();
+    notify("Soul Anchor attuned — you will wake here.");
+  }
+
+  // Breaking the anchor you were bound to unbinds your spawn.
+  anchorBroken(x, y, z) {
+    if (!this.spawn) return;
+    if (Math.abs(this.spawn[0] - (x + 0.5)) < 0.01 &&
+        Math.abs(this.spawn[1] - (y + 1)) < 0.01 &&
+        Math.abs(this.spawn[2] - (z + 0.5)) < 0.01) {
+      const [sx, sz] = SPAWN_XZ;
+      this.spawn = [sx, this.world.spawnHeight(Math.floor(sx), Math.floor(sz)), sz];
+      notify("The Soul Anchor breaks — your spawn returns to the world origin.");
+    }
+  }
+
+  // Wayshard: consume to warp to the surface directly above. Returns true if
+  // the warp happened (the caller then consumes the item).
+  useWayshard() {
+    if (this.net && this.net.isClient) { notify("Wayshards aren't synced in multiplayer yet"); return false; }
+    const p = this.player.pos;
+    const ts = this.world.topSolidY(Math.floor(p[0]), Math.floor(p[2]));
+    if (ts < 0) { notify("The wayshard can't find the sky here"); return false; }
+    if (p[1] >= ts - 0.5) { notify("You're already under the open sky"); return false; }
+    this.player.pos = [p[0], ts + 1, p[2]];
+    this.player.vel = [0, 0, 0];
+    this.player._fallStart = null;
+    sfx.warp();
+    notify("The wayshard shatters — daylight.");
+    return true;
+  }
+
   respawn() {
     sfx.died();
     if (this.player.mount) { this.player.mount.data.rider = false; this.player.mount = null; }
+    // pin a death waypoint on the atlas (replacing the previous one)
+    if (Settings.get("deathWaypoints")) {
+      const [px, py, pz] = this.player.pos;
+      this.waypoints = (this.waypoints || []).filter((w) => !w.death);
+      this.waypoints.push({
+        x: Math.round(px * 10) / 10, y: Math.round(py), z: Math.round(pz * 10) / 10,
+        name: "Where you fell", color: "#e05252", death: true,
+      });
+      this.map.onWaypointsChanged();
+    }
     this.dropItemsOnDeath();
     this.player.pos = this.spawn.slice();
     this.player.vel = [0, 0, 0];

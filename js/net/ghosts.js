@@ -12,8 +12,9 @@ import { okPid } from "./protocol.js";
 
 // Entity types that travel in snapshots, by index. Same code version on both
 // ends (enforced at handshake) -> same table.
-export const NET_TYPES = ["drop", "boat", "sheep", "pig", "zombie"];
+export const NET_TYPES = ["drop", "boat", "sheep", "pig", "zombie", "cow"];
 const NET_TYPE_IDX = new Map(NET_TYPES.map((t, i) => [t, i]));
+const NET_MOBS = new Set(["sheep", "pig", "zombie", "cow"]);   // health+hurt in a/b
 
 // Item keys by index for compact drop tuples. ITEMS has deterministic
 // insertion order, identical across same-version peers.
@@ -49,7 +50,7 @@ export function buildEntTuples(entities) {
     if (e.type === "drop") {
       a = Math.max(0, itemKeyToIdx(e.data.key));
       b = Math.min(999, e.data.count || 1);
-    } else if (e.type === "sheep" || e.type === "pig" || e.type === "zombie") {
+    } else if (NET_MOBS.has(e.type)) {
       a = e.data.health || 0;
       b = (e.data.hurtFlash || 0) > 0 ? 1 : 0;
     }
@@ -88,7 +89,7 @@ export class GhostWorld {
         if (key) e.data.key = key;
         e.data.count = b;
         e.data.bob = e.data.bob || Math.random() * Math.PI * 2;
-      } else if (type === "sheep" || type === "pig" || type === "zombie") {
+      } else if (NET_MOBS.has(type)) {
         e.data.health = a;
         if (b) e.data.hurtFlash = 0.3;
       }

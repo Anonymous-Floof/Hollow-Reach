@@ -156,7 +156,7 @@ export const zombie = {
 
     onInteract(e, ctx, button) {
       if (button !== "left") return;
-      e.data.health -= attackDamage(ctx.inventory);
+      e.data.health -= attackDamage(ctx.inventory, ctx.player);
       e.data.hurtFlash = 0.35;
       const vpos = [e.pos[0], e.pos[1] + 1.6, e.pos[2]];
       sfx.thwack(vpos);

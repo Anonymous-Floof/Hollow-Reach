@@ -33,6 +33,9 @@ html, body {
 /* ---------- Screens (menu / pause / settings / inventory) ---------- */
 .screen {
   position: fixed; inset: 0;
+  /* above the in-world overlays (nameplates z3, waypoint tags z3, minimap z2)
+     so menus never have floating labels bleeding through them */
+  z-index: 10;
   display: flex; align-items: center; justify-content: center;
   background: radial-gradient(circle at 50% 30%, #1d2733 0%, #0e1218 75%);
 }
@@ -453,7 +456,8 @@ select {
 
 /* ---------- Toasts ---------- */
 #notify {
-  position: fixed; right: 14px; top: 14px;
+  /* sits below the minimap's corner slot so toasts never hide behind it */
+  position: fixed; right: 14px; top: 196px; z-index: 90;
   display: flex; flex-direction: column; gap: 6px; align-items: flex-end;
   pointer-events: none;
 }
@@ -495,5 +499,42 @@ select {
   background: rgba(10,14,18,0.55); color: #eef4f8;
   padding: 2px 8px; border-radius: 4px; font-size: 12px;
   text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  transition: opacity .2s ease;
+}
+
+/* ---------- the Atlas: fullscreen map, minimap, waypoint markers ---------- */
+#map { background: #0b0e13; }
+#map-canvas { position: absolute; inset: 0; cursor: crosshair; image-rendering: pixelated; }
+#map-side {
+  position: absolute; top: 16px; right: 16px; width: 240px; max-height: calc(100vh - 32px);
+  overflow-y: auto; background: rgba(14,18,24,0.88); border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(6px);
+}
+#map-side h3 { margin: 0 0 8px; font-size: 15px; }
+.wp-list { display: flex; flex-direction: column; gap: 6px; }
+.wp-row { display: flex; align-items: center; gap: 6px; }
+.wp-row input[type="text"] {
+  flex: 1; min-width: 0; background: #10161e; color: #e8edf2;
+  border: 1px solid var(--slot-edge); border-radius: 5px; padding: 4px 7px; font-size: 12px;
+}
+.wp-row .btn.small { margin: 0; padding: 3px 8px; font-size: 12px; }
+.wp-swatch {
+  width: 18px; height: 18px; flex: 0 0 18px; border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.5); cursor: pointer; padding: 0;
+}
+.wp-hint { color: var(--muted); font-size: 11.5px; line-height: 1.5; margin: 8px 0 0; }
+
+#minimap {
+  position: fixed; top: 14px; right: 14px; width: 168px; height: 168px;
+  border: 2px solid rgba(255,255,255,0.18); border-radius: 8px;
+  background: #0b0e13; image-rendering: pixelated; z-index: 2;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.45);
+}
+
+#waypoint-tags { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
+.waypoint-tag {
+  position: absolute; left: 0; top: 0; white-space: nowrap;
+  background: rgba(10,14,18,0.55); padding: 2px 8px; border-radius: 4px;
+  font-size: 12px; text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   transition: opacity .2s ease;
 }

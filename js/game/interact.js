@@ -3,7 +3,8 @@
 // gate), and places the selected block item.
 
 import { raycast } from "./raycast.js";
-import { getBlock, AIR, isReplaceable } from "../world/blocks.js";
+import { bodyOverlaps } from "./physics.js";
+import { getBlock, BLOCK, AIR, isReplaceable } from "../world/blocks.js";
 import { getItem } from "./items.js";
 import { entityContents } from "./blockentities.js";
 import { defOf } from "./entities/registry.js";
@@ -73,6 +74,19 @@ export class Interact {
         const blockHandles = tb && (tb.station || tb.sleep || tb.toggle) && !input.down("ShiftLeft");
         if (!blockHandles && opts.onEat && opts.onEat(it)) { inventory.consumeSelected(); return; }
       }
+      // ---- buckets: scoop / pour, works when aiming at water (which the solid
+      // raycast skips), so it runs before the !hit early-out below ----
+      if (it && it.type === "bucket") {
+        const tb = hit ? getBlock(world.getBlock(hit.x, hit.y, hit.z)) : null;
+        const blockHandles = tb && (tb.station || tb.sleep || tb.toggle || tb.anchor) && !input.down("ShiftLeft");
+        if (!blockHandles && this.useBucket(world, inventory, player, hit, opts)) return;
+      }
+      // ---- wayshard: warp to the surface (works aiming anywhere) ----
+      if (it && it.type === "warp") {
+        const tb = hit ? getBlock(world.getBlock(hit.x, hit.y, hit.z)) : null;
+        const blockHandles = tb && (tb.station || tb.sleep || tb.toggle || tb.anchor) && !input.down("ShiftLeft");
+        if (!blockHandles && opts.onWarp && opts.onWarp()) { inventory.consumeSelected(); return; }
+      }
     }
 
     this.selection = hit ? { x: hit.x, y: hit.y, z: hit.z } : null;
@@ -117,28 +131,102 @@ export class Interact {
         opts.onOpenStation(b.station, hit.x, hit.y, hit.z);
       } else if (b.sleep && !input.down("ShiftLeft")) {
         opts.onSleep();
+      } else if (b.anchor && !input.down("ShiftLeft")) {
+        if (opts.onSetSpawn) opts.onSetSpawn(hit.x, hit.y, hit.z);
       } else if (b.toggle && !input.down("ShiftLeft")) {
-        this.toggle(world, hit, b);
+        this.toggle(world, hit, b, player);
       } else {
         this.tryPlace(world, inventory, player, hit, opts);
       }
     }
   }
 
-  // Open/close a door or trapdoor (doors flip both halves together).
-  toggle(world, hit, b) {
-    world.setMeta(hit.x, hit.y, hit.z, world.getMeta(hit.x, hit.y, hit.z) ^ 1);
-    sfx.doorToggle(b, (world.getMeta(hit.x, hit.y, hit.z) & 1) !== 0, [hit.x + 0.5, hit.y + 0.5, hit.z + 0.5]);
+  // Open/close a door or trapdoor (doors flip both halves together). A toggle
+  // that would close the door INTO a body standing in the frame is refused —
+  // previously the next physics sweep would eject the body out of the new
+  // collision box (the old "close a door on yourself to teleport" glitch).
+  toggle(world, hit, b, player) {
+    const cells = [[hit.x, hit.y, hit.z]];
     if (b.tall) {
       const upper = (world.getMeta(hit.x, hit.y, hit.z) & 2) !== 0;
       const oy = upper ? hit.y - 1 : hit.y + 1;
-      if (getBlock(world.getBlock(hit.x, oy, hit.z)).tall) {
-        world.setMeta(hit.x, oy, hit.z, world.getMeta(hit.x, oy, hit.z) ^ 1);
+      if (getBlock(world.getBlock(hit.x, oy, hit.z)).tall) cells.push([hit.x, oy, hit.z]);
+    }
+
+    // bodies that could be caught: the player + any live entity near the door
+    const bodies = [player];
+    if (world.entities) {
+      for (const e of world.entities.entities) {
+        if (e.dead || !e.hw) continue;
+        if (Math.abs(e.pos[0] - (hit.x + 0.5)) < 3 && Math.abs(e.pos[2] - (hit.z + 0.5)) < 3 &&
+            Math.abs(e.pos[1] - hit.y) < 4) bodies.push(e);
       }
     }
+    const before = bodies.map((bd) => bodyOverlaps(world, bd));
+
+    const old = cells.map(([x, y, z]) => world.getMeta(x, y, z));
+    for (const [x, y, z] of cells) world.setMeta(x, y, z, world.getMeta(x, y, z) ^ 1);
+
+    // newly trapped body -> revert the whole toggle silently
+    for (let i = 0; i < bodies.length; i++) {
+      if (!before[i] && bodyOverlaps(world, bodies[i])) {
+        cells.forEach(([x, y, z], k) => world.setMeta(x, y, z, old[k]));
+        return;
+      }
+    }
+    sfx.doorToggle(b, (world.getMeta(hit.x, hit.y, hit.z) & 1) !== 0, [hit.x + 0.5, hit.y + 0.5, hit.z + 0.5]);
   }
 
   reset() { this.target = null; this.progress = 0; this.breakFrac = 0; }
+
+  // Use the held bucket. Returns true if the click was handled (even a refusal
+  // with a notify counts — the click shouldn't fall through and place/toggle).
+  useBucket(world, inventory, player, hit, opts) {
+    const slot = inventory.selectedSlot();
+    if (!slot) return false;
+    const eye = player.eye(), dir = player.forward();
+
+    if (slot.key === "bucket") {
+      // scoop: ray that stops on liquid; only a still SOURCE cell can be taken
+      const wHit = raycast(world, eye, dir, 6, true);
+      if (!wHit || world.getBlock(wHit.x, wHit.y, wHit.z) !== BLOCK.water) return false;
+      if (world.getMeta(wHit.x, wHit.y, wHit.z) !== 0) {
+        if (opts.notify) opts.notify("Only still source water can be scooped");
+        return true;
+      }
+      world.setBlock(wHit.x, wHit.y, wHit.z, AIR, true);
+      inventory.consumeSelected();
+      const left = inventory.give("water_bucket", 1);
+      if (left > 0) world.spawnDrop(player.pos[0], player.pos[1] + 0.6, player.pos[2], "water_bucket", left);
+      sfx.splash(false);
+      return true;
+    }
+
+    if (slot.key === "water_bucket") {
+      // pour: into the near cell of a solid hit, or straight into water/air the
+      // liquid ray finds (topping a flowing cell back up to a source)
+      let cx, cy, cz;
+      if (hit) {
+        if (isReplaceable(world.getBlock(hit.x, hit.y, hit.z))) { cx = hit.x; cy = hit.y; cz = hit.z; }
+        else { cx = hit.nx; cy = hit.ny; cz = hit.nz; }
+      } else {
+        const wHit = raycast(world, eye, dir, 6, true);
+        if (!wHit) return false;
+        cx = wHit.x; cy = wHit.y; cz = wHit.z;
+      }
+      const existing = world.getBlock(cx, cy, cz);
+      const eb = getBlock(existing);
+      if (existing !== AIR && eb.render !== "liquid" && !isReplaceable(existing)) return false;
+      world.setBlock(cx, cy, cz, BLOCK.water, true, 0);   // meta 0 = a source
+      inventory.consumeSelected();
+      const left = inventory.give("bucket", 1);
+      if (left > 0) world.spawnDrop(player.pos[0], player.pos[1] + 0.6, player.pos[2], "bucket", left);
+      sfx.splash(true);
+      return true;
+    }
+
+    return false;   // milk bucket has no pour use (yet)
+  }
 
   complete(world, inventory, hit, b, tool, opts) {
     // A block only *requires* a tool when it has a mining tier above hand (0).
@@ -177,6 +265,7 @@ export class Interact {
       if (getBlock(world.getBlock(ox, hit.y, oz)).render === "bed") world.setBlock(ox, hit.y, oz, AIR, true);
     }
     world.setBlock(hit.x, hit.y, hit.z, AIR, true);
+    if (b.anchor && opts.onAnchorBroken) opts.onAnchorBroken(hit.x, hit.y, hit.z);
     if (b.log) world.decayLeavesAround(hit.x, hit.y, hit.z);
     if (tool && tool.type === "tool") inventory.damageSelectedTool(1);
   }
@@ -208,6 +297,20 @@ export class Interact {
     if (existing !== AIR && getBlock(existing).render !== "liquid" && !isReplaceable(existing)) return;
     const placed = getBlock(item.blockId);
     if (placed.solid && this.intersectsPlayer(cx, cy, cz, player)) return;
+
+    // shore plants (papyrus): only on sand/grass/dirt beside water, or stacked
+    // on their own kind (up to a natural clump height)
+    if (placed.shore) {
+      const below = world.getBlock(cx, cy - 1, cz);
+      const groundOk = below === BLOCK.sand || below === BLOCK.turf || below === BLOCK.loam;
+      let nearWater = below === item.blockId;   // stacking a reed is always fine
+      if (!nearWater && groundOk) {
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (world.getBlock(cx + dx, cy - 1, cz + dz) === BLOCK.water) { nearWater = true; break; }
+        }
+      }
+      if (!nearWater) { if (opts.notify) opts.notify("Papyrus needs wet shore ground"); return; }
+    }
 
     // bit0 marks a player-placed leaf so it's exempt from natural leaf decay.
     const meta = placed.leaf ? 1 : this.placementMeta(placed.render, player, hit);

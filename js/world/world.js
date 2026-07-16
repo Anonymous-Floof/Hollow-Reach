@@ -3,7 +3,7 @@
 // saving), and owns the GL mesh buffers.
 
 import { Chunk, CX, CZ, WH, localIdx, chunkKey } from "./chunk.js";
-import { generate, heightAt, SEA_LEVEL } from "./worldgen.js";
+import { generate, heightAt, SEA_LEVEL, GEN_VERSION } from "./worldgen.js";
 import { computeLight } from "./lighting.js";
 import { meshChunk } from "./mesher.js";
 import { BLOCK, isSolid, isOpaque, emitOf, isLeaf, isLog, getBlock as blockDef } from "./blocks.js";
@@ -18,10 +18,11 @@ const GRASS_PER_DAY = 10; // ~grass blocks that spread per in-game day in the lo
 const EMPTY_BOXES = [];   // shared "no collision" result (never mutated by callers)
 
 export class World {
-  constructor(gl, atlas, seed, renderDist = 8) {
+  constructor(gl, atlas, seed, renderDist = 8, genVer = GEN_VERSION) {
     this.gl = gl;
     this.atlas = atlas;
     this.seed = seed >>> 0;
+    this.genVer = genVer || GEN_VERSION;
     this.renderDist = renderDist;
     this.chunks = new Map();      // key -> Chunk
     this.edits = new Map();       // key -> Map(localIndex -> blockId)  (player changes)
@@ -34,6 +35,8 @@ export class World {
     this._ringR = -1; this._ring = null;   // cached nearest-first stream offsets
     this._boxScratch = [[0, 0, 0, 0, 0, 0]]; // reused full-cube collision box
     this.blockEntities = new Map(); // "x,y,z" -> forge/chest state (persists across chunk reload)
+    this.mapDirty = new Set();    // chunk keys whose atlas-map tile is stale (consumed by ui/map.js)
+    this.explored = new Set();    // every chunk key ever generated in this world (atlas fog-of-war; persisted)
     this.entities = new EntityManager(this); // live entities (item drops, future mobs/boats)
     this.water = new WaterSim(this);  // flowing-water automaton (see world/water.js)
 
@@ -51,7 +54,7 @@ export class World {
     // Falls back to synchronous main-thread generation if Workers are missing.
     this.pool = null;
     try {
-      this.pool = new GenPool(this.seed, (data) => this._onGenerated(data));
+      this.pool = new GenPool(this.seed, (data) => this._onGenerated(data), this.genVer);
     } catch (e) {
       console.warn("Generation workers unavailable — generating on main thread.", e);
       this.pool = null;
@@ -236,6 +239,7 @@ export class World {
   }
   trySpawnSheep(px, pz, dayFactor) { this.trySpawnGrazer("sheep", px, pz, dayFactor, 8); }
   trySpawnPig(px, pz, dayFactor) { this.trySpawnGrazer("pig", px, pz, dayFactor, 6); }
+  trySpawnCow(px, pz, dayFactor) { this.trySpawnGrazer("cow", px, pz, dayFactor, 5); }
 
   // Occasionally spawn a zombie on solid ground near the player at night, capped.
   // Spawns on any walkable surface (not just grass) and never on/in water.
@@ -309,6 +313,7 @@ export class World {
       m.set(li, id | (meta << 10));
       if (this.onNetEdit) this.onNetEdit(wx, wy, wz, id, meta);
     }
+    this.mapDirty.add(chunkKey(cx, cz));
     // re-light + re-mesh this chunk and any neighbour sharing the touched border
     this._dirty(cx, cz);
     if (lx === 0) this._dirty(cx - 1, cz);
@@ -351,6 +356,7 @@ export class World {
     if (!m) { m = new Map(); this.edits.set(k, m); }
     m.set(li, id | (meta << 10));
     if (this.onNetEdit) this.onNetEdit(wx, wy, wz, id, meta);
+    this.mapDirty.add(k);
     this._dirtyMesh(cx, cz);
     if (lx === 0) this._dirtyMesh(cx - 1, cz);
     if (lx === CX - 1) this._dirtyMesh(cx + 1, cz);
@@ -378,6 +384,7 @@ export class World {
     if (prevId === id && c.meta[li] === meta) return;
     c.voxels[li] = id;
     c.meta[li] = meta;
+    this.mapDirty.add(k);
     this._dirty(cx, cz);
     if (lx === 0) this._dirty(cx - 1, cz);
     if (lx === CX - 1) this._dirty(cx + 1, cz);
@@ -488,6 +495,8 @@ export class World {
     this.chunks.set(key, c);
     this._invalidateChunkMemo();   // the memo may hold "missing" for this slot
     this._streamScan = true;       // new chunk: keep the generation scan alive
+    this.mapDirty.add(key);        // the atlas can upgrade its predicted tile
+    this.explored.add(key);
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) this._dirty(cx + dx, cz + dz);
     return c;
   }
@@ -496,7 +505,7 @@ export class World {
   // through before a worker reply arrives.
   generateChunkSync(cx, cz) {
     const voxels = new Uint16Array(CX * WH * CZ);
-    generate({ cx, cz, voxels }, this.seed);
+    generate({ cx, cz, voxels }, this.seed, this.genVer);
     return this._installChunk(cx, cz, voxels);
   }
 
@@ -543,7 +552,7 @@ export class World {
   }
 
   spawnHeight(wx, wz) {
-    return Math.max(heightAt(this.seed, wx, wz), SEA_LEVEL) + 2;
+    return Math.max(heightAt(this.seed, wx, wz, this.genVer), SEA_LEVEL) + 2;
   }
 
   // Synchronously generate + light + mesh a full RxR chunk region around (wx,wz).

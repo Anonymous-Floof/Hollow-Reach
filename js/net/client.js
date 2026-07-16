@@ -34,6 +34,8 @@ const SFX_MAP = {
   sheep_death: (p) => sfx.sheep && sfx.sheep("death", p, 1),
   pig_hurt: (p) => sfx.pig && sfx.pig("hurt", p, 1),
   pig_death: (p) => sfx.pig && sfx.pig("death", p, 1),
+  cow_hurt: (p) => sfx.cow && sfx.cow("hurt", p, 1),
+  cow_death: (p) => sfx.cow && sfx.cow("death", p, 1),
   zombie_hurt: (p) => sfx.zombie && sfx.zombie("hurt", p, 1),
   zombie_death: (p) => sfx.zombie && sfx.zombie("death", p, 1),
 };
@@ -377,6 +379,7 @@ function validateWorldPayload(v) {
   return {
     name: v.name.slice(0, 28),
     seed: v.seed >>> 0,
+    genVer: (typeof v.genVer === "number" && v.genVer >= 1 && v.genVer <= 99) ? (v.genVer | 0) : 1,
     time: v.time,
     spawn: [v.spawn[0], v.spawn[1], v.spawn[2]],
     edits,

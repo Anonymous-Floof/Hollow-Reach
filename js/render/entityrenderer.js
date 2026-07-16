@@ -32,6 +32,7 @@ export class EntityRenderer {
     this.boatMesh = null;          // shared planks-textured hull
     this.sheepMesh = null;         // shared white sheep (body + head + legs)
     this.pigMesh = null;           // shared pink pig
+    this.cowMesh = null;           // shared brown-and-white cow
     this.zombieMesh = null;        // shared green zombie (humanoid)
     this.playerMeshes = new Map(); // paletteIdx -> humanoid mesh (remote players)
     this._model = mat4.create();
@@ -120,6 +121,32 @@ export class EntityRenderer {
         leg(0.17, 0.26, 1), leg(-0.17, 0.26, 2), leg(0.17, -0.24, 3), leg(-0.17, -0.24, 4)]);
     }
     return this.pigMesh;
+  }
+
+  cow() {
+    if (!this.cowMesh) {
+      // +z = forward: a big barrel body in brown with white patches, a blazed
+      // face with pale horns, a pink muzzle and udder, and tall dark legs.
+      const BODY = [0.45, 0.32, 0.24], PATCH = [0.93, 0.91, 0.86], HORN = [0.88, 0.85, 0.74];
+      const MUZZLE = [0.85, 0.62, 0.60], UDDER = [0.90, 0.68, 0.66], LEG = [0.32, 0.24, 0.19], EYE = [0.10, 0.09, 0.08];
+      // bones: 1-4 legs (FL FR BL BR), 5 head group (graze dip)
+      const body = { c: [0, 0.86, -0.02], h: [0.36, 0.30, 0.55], col: BODY };
+      const patchA = { c: [0.21, 0.94, -0.28], h: [0.16, 0.23, 0.20], col: PATCH };   // hip patch
+      const patchB = { c: [-0.18, 0.80, 0.22], h: [0.19, 0.20, 0.18], col: PATCH };   // shoulder patch
+      const head = { c: [0, 1.06, 0.68], h: [0.20, 0.20, 0.16], col: BODY, bone: 5 };
+      const blaze = { c: [0, 1.10, 0.845], h: [0.07, 0.15, 0.006], col: PATCH, bone: 5 };
+      const muzzle = { c: [0, 0.94, 0.82], h: [0.14, 0.09, 0.06], col: MUZZLE, bone: 5 };
+      const eye = (x) => ({ c: [x, 1.12, 0.842], h: [0.028, 0.032, 0.006], col: EYE, bone: 5 });
+      const horn = (x) => ({ c: [x, 1.26, 0.60], h: [0.035, 0.075, 0.035], col: HORN, bone: 5 });
+      const ear = (x) => ({ c: [x, 1.16, 0.60], h: [0.055, 0.035, 0.03], col: BODY, bone: 5 });
+      const udder = { c: [0, 0.50, -0.20], h: [0.14, 0.08, 0.16], col: UDDER };
+      const tail = { c: [0, 1.02, -0.585], h: [0.03, 0.14, 0.03], col: BODY };
+      const leg = (x, z, b) => ({ c: [x, 0.28, z], h: [0.095, 0.28, 0.095], col: LEG, bone: b });
+      this.cowMesh = this._buildMultiBox([body, patchA, patchB, head, blaze, muzzle,
+        eye(0.105), eye(-0.105), horn(0.155), horn(-0.155), ear(0.24), ear(-0.24), udder, tail,
+        leg(0.23, 0.38, 1), leg(-0.23, 0.38, 2), leg(0.23, -0.36, 3), leg(-0.23, -0.36, 4)]);
+    }
+    return this.cowMesh;
   }
 
   zombie() {
@@ -294,6 +321,10 @@ export class EntityRenderer {
       const hurt = e.data && e.data.hurtFlash > 0;
       return { mesh: this.pig(), textured: false, tint: hurt ? [1.4, 0.5, 0.5] : [1, 1, 1], yOff: 0 };
     }
+    if (e.type === "cow") {
+      const hurt = e.data && e.data.hurtFlash > 0;
+      return { mesh: this.cow(), textured: false, tint: hurt ? [1.4, 0.5, 0.5] : [1, 1, 1], yOff: 0 };
+    }
     if (e.type === "zombie") {
       const hurt = e.data && e.data.hurtFlash > 0;
       return { mesh: this.zombie(), textured: false, tint: hurt ? [1.4, 0.5, 0.5] : [1, 1, 1], yOff: 0 };
@@ -351,7 +382,7 @@ export class EntityRenderer {
     b.fill(0);
     const set = (i, px, py, pz, ang) => { const o = i * 4; b[o] = px; b[o + 1] = py; b[o + 2] = pz; b[o + 3] = ang; };
     const sw = Math.sin(st.phase) * st.amp;
-    if (e.type === "sheep" || e.type === "pig") {
+    if (e.type === "sheep" || e.type === "pig" || e.type === "cow") {
       // diagonal gait: FL+BR swing together, FR+BL opposite
       const s = sw * 0.75, [lx, fz, bz, hy] = a.legs;
       set(1, lx, a.hip, fz, s); set(2, -lx, a.hip, fz, -s);
@@ -452,6 +483,7 @@ function hexToRgb(h) {
 const ANIM = {
   sheep: { ref: 1.7, stride: 3.4, graze: true, hip: 0.38, legs: [0.18, 0.28, -0.26, 0.62], neckZ: 0.40 },
   pig: { ref: 1.6, stride: 3.6, graze: true, hip: 0.27, legs: [0.17, 0.26, -0.24, 0.48], neckZ: 0.34 },
+  cow: { ref: 1.4, stride: 2.8, graze: true, hip: 0.56, legs: [0.23, 0.38, -0.36, 0.98], neckZ: 0.52 },
   zombie: { ref: 2.4, stride: 2.2 },
   remote_player: { ref: 4.3, stride: 2.3 },
 };

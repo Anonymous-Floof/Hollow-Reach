@@ -7,9 +7,9 @@ import { generate } from "./worldgen.js";
 import { CX, CZ, WH } from "./chunk.js";
 
 self.onmessage = (e) => {
-  const { cx, cz, seed } = e.data;
+  const { cx, cz, seed, ver } = e.data;
   const voxels = new Uint16Array(CX * WH * CZ);
   // generate() only needs { cx, cz, voxels }; build a bare stand-in.
-  generate({ cx, cz, voxels }, seed);
+  generate({ cx, cz, voxels }, seed, ver);
   self.postMessage({ cx, cz, voxels }, [voxels.buffer]);
 };

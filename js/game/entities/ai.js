@@ -45,13 +45,21 @@ export function floatInWater(world, e) {
 }
 
 // Damage a player's left-click deals to a mob: swords hit hardest, other tools a
-// bit, fists least. Shared by every attackable mob.
-export function attackDamage(inventory) {
+// bit, fists least. Shared by every attackable mob. When the attacker is passed
+// (the local player), a Minecraft-style CRIT applies: falling mid-swing (not on
+// the ground, not flying/swimming/climbing) lands ×1.5 with a sharper snap.
+export function attackDamage(inventory, attacker) {
   const slot = inventory && inventory.selectedSlot ? inventory.selectedSlot() : null;
   const it = slot ? getItem(slot.key) : null;
-  if (it && it.type === "tool" && it.toolType === "sword") return 3 + it.tier;
-  if (it && it.type === "tool") return 2;
-  return 1.5;
+  let dmg = 1.5;
+  if (it && it.type === "tool" && it.toolType === "sword") dmg = 3 + it.tier;
+  else if (it && it.type === "tool") dmg = 2;
+  if (attacker && attacker.vel && attacker.vel[1] < -1 && !attacker.onGround &&
+      !attacker.flying && !attacker.swimming && !attacker.climbing) {
+    dmg *= 1.5;
+    sfx.crit();
+  }
+  return dmg;
 }
 
 // Stuck watchdog: `true` when the mob wanted to move but its feet barely did for
@@ -162,7 +170,7 @@ export function grazeUpdate(e, dt, ctx, opts) {
 // Shared "got hit by the player" reaction for a grazer: damage, hurt flash, flee,
 // knockback, tool wear. Returns true if the hit was fatal.
 export function grazeHurt(e, ctx) {
-  e.data.health -= attackDamage(ctx.inventory);
+  e.data.health -= attackDamage(ctx.inventory, ctx.player);
   e.data.hurtFlash = 0.35;
   e.data.flee = 4;
   const vpos = [e.pos[0], e.pos[1] + e.h * 0.7, e.pos[2]];

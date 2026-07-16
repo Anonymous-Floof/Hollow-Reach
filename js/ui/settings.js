@@ -31,6 +31,8 @@ export const SCHEMA = [
   { key: "monsters", label: "Spawn Monsters", type: "toggle", def: true, category: "Gameplay" },
   { key: "flight", label: "Allow Flight (double-tap Space)", type: "toggle", def: true, category: "Gameplay" },
   { key: "highStep", label: "High Step (walk up full blocks)", type: "toggle", def: false, category: "Gameplay" },
+  { key: "minimap", label: "Minimap (needs the Atlas · N)", type: "toggle", def: true, category: "Gameplay" },
+  { key: "deathWaypoints", label: "Death Waypoints on the Atlas", type: "toggle", def: true, category: "Gameplay" },
   { key: "masterVolume", label: "Master Volume", type: "slider", min: 0, max: 100, step: 1, def: 80, category: "Audio" },
   { key: "sfxVolume", label: "Effects Volume", type: "slider", min: 0, max: 100, step: 1, def: 80, category: "Audio" },
   { key: "ambientVolume", label: "Ambience Volume", type: "slider", min: 0, max: 100, step: 1, def: 40, category: "Audio" },

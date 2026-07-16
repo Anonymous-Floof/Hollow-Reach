@@ -28,6 +28,27 @@ export const RECIPES = [
 
   // boat: a hull of planks (P_P / PPP)
   { type: "shaped", pattern: ["P P", "PPP"], legend: { P: "#planks" }, out: { key: "boat", count: 1 }, station: "workbench" },
+
+  // bucket: a folded V of iron
+  { type: "shaped", pattern: ["X X", " X "], legend: { X: "ferralite_ingot" }, out: { key: "bucket", count: 1 }, station: "workbench" },
+
+  // paper from a row of shore papyrus
+  { type: "shaped", pattern: ["XXX"], legend: { X: "papyrus" }, out: { key: "paper", count: 3 }, station: "workbench" },
+
+  // the Atlas: pages, a leather binding, an azurite compass jewel
+  { type: "shapeless", in: { paper: 3, leather: 1, azurite: 1 }, out: { key: "atlas", count: 1 }, station: "workbench" },
+
+  // Soul Anchor: one of every ore ringing a sparkstone heart
+  { type: "shaped", pattern: ["ECF", "ZSG", "VDB"],
+    legend: {
+      E: "embercoal", C: "raw_copper", F: "raw_ferralite",
+      Z: "azurite", S: "sparkstone", G: "raw_sunbrass",
+      V: "verdanite", D: "aetherite", B: "gloamite",
+    },
+    out: { key: "soul_anchor", count: 1 }, station: "workbench" },
+
+  // Wayshard: gloamite keyed to a sparkstone spark
+  { type: "shapeless", in: { gloamite: 1, sparkstone: 1 }, out: { key: "wayshard", count: 2 }, station: "hand" },
 ];
 
 // Per-wood doors (3 per 2x3) and trapdoors (2 per 2x3). Alderwood keeps its
@@ -36,6 +57,8 @@ const WOOD_DOORS = [
   { plank: "planks", door: "door", trap: "trapdoor" },
   { plank: "pine_planks", door: "pine_door", trap: "pine_trapdoor" },
   { plank: "dusk_planks", door: "dusk_door", trap: "dusk_trapdoor" },
+  { plank: "birch_planks", door: "birch_door", trap: "birch_trapdoor" },
+  { plank: "palm_planks", door: "palm_door", trap: "palm_trapdoor" },
 ];
 for (const w of WOOD_DOORS) {
   RECIPES.push(
@@ -54,7 +77,7 @@ for (const slabKey in VSLAB_OF) {
 
 // --- new material families (mirror the originals) ---
 // Planks from each new log.
-for (const w of ["pine", "dusk"]) {
+for (const w of ["pine", "dusk", "birch", "palm"]) {
   RECIPES.push({ type: "shapeless", in: { [`${w}_log`]: 1 }, out: { key: `${w}_planks`, count: 4 }, station: "hand" });
 }
 // Polished (from base) and bricks (from polished) for each new stone.
@@ -116,6 +139,7 @@ export const SMELTING = [
   { in: "sand", out: "glass", time: 5 },
   { in: "cobbled", out: "greystone", time: 6 },
   { in: "pork_raw", out: "pork_cooked", time: 6 },
+  { in: "beef_raw", out: "beef_cooked", time: 6 },
 ];
 
 // Base burn time (seconds) for the *raw* fuels only. Everything else made from

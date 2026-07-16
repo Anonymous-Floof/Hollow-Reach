@@ -245,12 +245,13 @@ export class Player {
   eat(item) {
     if (!this.hungerOn) {                       // hunger disabled: food just heals a bit
       if (this.health >= this.maxHealth) return false;
-      this.heal(item.risky ? (Math.random() < 0.5 ? 1 : 0) : item.food);
+      this.heal(item.risky ? (Math.random() < 0.5 ? 1 : 0) : Math.ceil(item.food / 2));
       return true;
     }
     if (item.risky) {
-      if (Math.random() < 0.5) this.addFood(1, 0);
-      else { this.hunger = Math.max(0, this.hunger - 2); this.saturation = Math.min(this.saturation, this.hunger); }
+      // the gamble is symmetric around the tooltip's number
+      if (Math.random() < 0.5) this.addFood(item.food, 0);
+      else { this.hunger = Math.max(0, this.hunger - item.food); this.saturation = Math.min(this.saturation, this.hunger); }
       return true;
     }
     if (this.hunger >= this.maxHunger) return false;   // already full — don't waste it

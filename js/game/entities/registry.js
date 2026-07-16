@@ -22,6 +22,7 @@ import { drop } from "./drop.js";
 import { boat } from "./boat.js";
 import { sheep } from "./sheep.js";
 import { pig } from "./pig.js";
+import { cow } from "./cow.js";
 import { zombie } from "./zombie.js";
 
 // Another player, seen over the network. Always a ghost (net-driven, no local
@@ -39,6 +40,7 @@ export const ENTITY_TYPES = {
   boat,
   sheep,
   pig,
+  cow,
   zombie,
   remote_player,
 };

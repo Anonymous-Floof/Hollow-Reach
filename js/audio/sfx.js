@@ -352,6 +352,44 @@ export const sfx = {
       filter: { type: "bandpass", freq: 1400, Q: 3, sweepTo: 700, sweepT: dur * 0.9 },
     });
   },
+  // Critical hit: a bright metallic snap over the regular thwack.
+  crit() {
+    const d = go(0.3, "sfx");
+    if (!d) return;
+    engine.tone(d, { wave: "sine", freq: 1900, sweepTo: 900, dur: 0.12, gain: 0.14, attack: 0.004 });
+    engine.tone(d, { delay: 0.04, wave: "sine", freq: 2600, sweepTo: 1300, dur: 0.1, gain: 0.08 });
+    engine.burst(d, { dur: 0.05, gain: 0.12, filters: [{ type: "highpass", freq: 2400, Q: 1 }] });
+  },
+
+  // Wayshard warp: a rising two-voice shimmer with an airy whoosh.
+  warp() {
+    const d = go(0.9, "sfx");
+    if (!d) return;
+    engine.tone(d, { wave: "sine", freq: 320, sweepTo: 1500, dur: 0.5, gain: 0.16, attack: 0.02 });
+    engine.tone(d, { wave: "sine", freq: 480, sweepTo: 2200, dur: 0.55, gain: 0.09, attack: 0.06 });
+    engine.burst(d, { dur: 0.5, gain: 0.12, attack: 0.05, filters: [{ type: "highpass", freq: 900, Q: 0.7 }] });
+    engine.tone(d, { delay: 0.45, wave: "sine", freq: 1800, sweepTo: 2600, dur: 0.2, gain: 0.05 });
+  },
+
+  cow(kind, pos, seed = 1) {
+    const dur = kind === "hurt" ? 0.4 : kind === "death" ? 1.1 : R(0.8, 1.15);
+    const d = go(dur + 0.2, "sfx", pos);
+    if (!d) return;
+    // the moo: a deep chesty larynx swelling up a shade as the mouth opens (a
+    // bandpass "throat" sweeping from a closed m-hum up to a round oo), then
+    // sagging. Slow, mild vibrato — anything faster reads as a bleat.
+    const f0 = R(88, 112) * (0.94 + (seed % 6) * 0.03) * (kind === "hurt" ? 1.3 : kind === "death" ? 0.78 : 1);
+    engine.tone(d, {
+      wave: "sawtooth", freq: f0 * 0.85, sweepTo: f0 * (kind === "death" ? 0.6 : 0.96), dur, gain: 0.26, attack: 0.12,
+      vibRate: 3.4, vibDepth: f0 * 0.04,
+      filter: { type: "lowpass", freq: 900, Q: 0.8 },
+    });
+    engine.tone(d, {                                 // the opening mouth
+      wave: "sawtooth", freq: f0 * 0.852, sweepTo: f0 * 0.95, dur, gain: 0.15, attack: 0.14,
+      filter: { type: "bandpass", freq: 300, Q: 1.7, sweepTo: 560, sweepT: dur * 0.6 },
+    });
+    engine.burst(d, { dur: dur * 0.7, gain: 0.04, attack: 0.15, curve: "lin", filters: [{ type: "bandpass", freq: 700, Q: 0.8 }] });  // breath
+  },
   zombie(kind, pos, seed = 1) {
     const dur = kind === "death" ? 1.3 : kind === "hurt" ? 0.32 : R(0.85, 1.2);
     const d = go(dur + 0.2, "sfx", pos);

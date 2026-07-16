@@ -13,7 +13,7 @@ import { getBlock, AIR, BLOCK } from "../world/blocks.js";
 const R = (a, b) => a + Math.random() * (b - a);
 
 // how far apart (blocks) mob idle calls schedule, per type
-const CALL_GAP = { sheep: [8, 22], pig: [7, 20], zombie: [5, 14] };
+const CALL_GAP = { sheep: [8, 22], pig: [7, 20], cow: [11, 28], zombie: [5, 14] };
 
 class Director {
   constructor() {

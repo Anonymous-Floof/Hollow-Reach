@@ -262,7 +262,13 @@ function emitWater(out, lx, ly, lz, wx, wy, wz, atlas, fluidH, cornerH, isWaterA
 
   // ---- top surface (omit when submerged: the column carries on upward) ----
   if (!submerged) {
-    const sk = skyAt(lx, ly + 1, lz) / 15, bl = blkAt(lx, ly + 1, lz) / 15;
+    // Light comes from the cell above — unless that cell is a solid block
+    // (water under a cave ceiling / overhang), whose light is 0 and used to
+    // paint the surface pitch black. Fall back to the water cell's own light,
+    // which the flood-fill fed from the sides.
+    const roofed = opaqueAt(lx, ly + 1, lz);
+    const sk = (roofed ? skyAt(lx, ly, lz) : skyAt(lx, ly + 1, lz)) / 15;
+    const bl = (roofed ? blkAt(lx, ly, lz) : blkAt(lx, ly + 1, lz)) / 15;
     // corners CCW seen from above: (X0,Z0)(X1,Z0)(X1,Z1)(X0,Z1)
     quad([X0, h00, Z0], [X1, h10, Z0], [X1, h11, Z1], [X0, h01, Z1], 1.0, sk, bl, 2, 2);
   }
@@ -383,7 +389,14 @@ function emitCross(out, wx, wy, wz, atlas, block, chunk, lx, ly, lz) {
 // verts carry the leaf-sway flag (wave 1) so tufts bend in the wind from the top
 // while staying rooted. Unshaded (like the torch); lighting comes from the cell.
 function emitPlant(out, wx, wy, wz, atlas, block, chunk, lx, ly, lz) {
-  const uv = atlas.uvForName(block.tex.all);
+  // Stacking plants (papyrus): segments with more of the plant above them use
+  // the plain stem tile; only the top segment shows the tufted crown, so a
+  // 3-tall clump reads as continuous reeds instead of three stacked tops.
+  let texName = block.tex.all;
+  if (block.tex.stem && ly + 1 < WH && chunk.voxels[localIdx(lx, ly + 1, lz)] === chunk.voxels[localIdx(lx, ly, lz)]) {
+    texName = block.tex.stem;
+  }
+  const uv = atlas.uvForName(texName);
   const u0 = uv[0], v0 = uv[1], u1 = uv[2], v1 = uv[3];
   const skyL = chunk.skylight[localIdx(lx, ly, lz)] / 15;
   const blkL = chunk.blocklight[localIdx(lx, ly, lz)] / 15;
