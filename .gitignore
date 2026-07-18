@@ -3,3 +3,5 @@ worlds
 _backups
 video_frames
 screenshots
+# release zips + notes built by tools/release.py
+dist

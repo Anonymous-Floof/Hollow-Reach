@@ -15,6 +15,7 @@ import { encodeSignal, decodeSignal } from "./signal.js";
 import { NET_VERSION, Bucket, okPid, MAX_NAME } from "./protocol.js";
 import { GhostWorld, buildEntTuples } from "./ghosts.js";
 import { SAVE_VERSION } from "../save/serialize.js";
+import { GAME_VERSION } from "../version.js";
 import { serializeEntities, bePosKey } from "../game/blockentities.js";
 import { BLOCKS, getBlock } from "../world/blocks.js";
 import { getItem } from "../game/items.js";
@@ -135,7 +136,7 @@ export class NetHost {
   _onHello(st, msg) {
     if (st.active || st.pid) return;
     if (msg.ver !== PROTO) {
-      st.peer.send("reject", { reason: `Version mismatch (host runs v${PROTO})` });
+      st.peer.send("reject", { reason: `Version mismatch — the host is running Hollowreach v${GAME_VERSION}; both players need the same game version` });
       setTimeout(() => st.peer.close(), 400);
       return;
     }

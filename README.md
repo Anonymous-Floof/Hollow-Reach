@@ -33,12 +33,21 @@ in **persistent, shareable worlds**.
 
 ## Running it
 
-**Double-click `run.bat`.** It starts a tiny local Python server (ES modules can't
-load over `file://`) and opens your browser automatically. That's it — no terminal
-navigation.
+The easiest way is a [release](https://github.com/Anonymous-Floof/Hollow-Reach/releases):
+one zip for every platform — download the latest, unzip, and launch. Running
+from a clone of this repo is exactly the same, just from the repo folder.
 
-Requirements: Python 3 (any recent version) and a browser with WebGL2 (recent
-Chrome, Edge, or Firefox). To stop the server, close its window or press Ctrl+C.
+- **Windows** — double-click **`run.bat`**
+- **Linux / macOS** — run **`./run.sh`**
+
+Either one starts a tiny local Python server (ES modules can't load over
+`file://`) and opens your browser automatically. That's it — no terminal
+navigation, nothing installed, nothing leaves your machine.
+
+Requirements: Python 3 (any recent version — preinstalled on most Linux
+distros and on macOS via the developer tools) and a browser with WebGL2
+(recent Chrome, Edge, or Firefox). To stop the server, close its window or
+press Ctrl+C.
 
 ## Controls
 
@@ -350,6 +359,10 @@ pattern is the intended home for future threaded lighting / mob AI.
   persistence pick it up automatically.
 - **Save format change:** bump `SAVE_VERSION` in `js/save/serialize.js` and add a
   migration function in `js/save/migrate.js` (`vN → vN+1`).
+- **Shipping a release:** the public version lives in `js/version.js`; changes
+  are outlined in `CHANGELOG.md` and `tools/release.py` bumps, packages, and
+  publishes the GitHub release — the whole flow is three commands, see
+  [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Deliberately deferred (foundation already in place)
 

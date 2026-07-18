@@ -25,6 +25,7 @@ import { engine as audio } from "./audio/engine.js";
 import { sfx } from "./audio/sfx.js";
 import { director } from "./audio/director.js";
 import { serialize, deserializeEdits, deserializeBlockEntities, SAVE_VERSION } from "./save/serialize.js";
+import { GAME_VERSION } from "./version.js";
 import { saveWorld, newId } from "./save/storage.js";
 import { exportWorld } from "./save/transfer.js";
 import { NetHost } from "./net/host.js";
@@ -140,7 +141,7 @@ class Game {
     }, { passive: false, capture: true });
 
     this.resize();
-    document.querySelector(".version-tag").textContent = `v${SAVE_VERSION} · Hollowreach`;
+    document.querySelector(".version-tag").textContent = `Hollowreach v${GAME_VERSION}`;
     this.menu.showMain();
     this.showScreen("menu");     // shown, but the boot overlay covers it until ready
 

@@ -5,6 +5,7 @@
 
 import { BLOCKS, BLOCK, AIR } from "../world/blocks.js";
 import { serializeEntities, deserializeEntities } from "../game/blockentities.js";
+import { GAME_VERSION } from "../version.js";
 
 export const SAVE_VERSION = 3;
 
@@ -21,6 +22,8 @@ export function serialize(world, player, inventory, meta) {
   }
   return {
     version: SAVE_VERSION,
+    // which game build last wrote this save — diagnostics only, never gated on
+    gameVersion: GAME_VERSION,
     id: meta.id,
     name: meta.name,
     seed: world.seed,
