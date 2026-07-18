@@ -11,6 +11,7 @@
 
 import { notify } from "./notify.js";
 import { getPlayerName, setPlayerName } from "../net/protocol.js";
+import { getRelayConfig, setRelayConfig } from "../net/transport.js";
 
 // ---------- host panel (rendered into the pause menu root) ----------
 export function renderHostPanel(root, game, onBack) {
@@ -41,6 +42,7 @@ export function renderHostPanel(root, game, onBack) {
       game.startHosting();
       refresh();
     }));
+    wrap.appendChild(relaySection());
     wrap.appendChild(btn("Back", "btn", onBack));
     root.appendChild(wrap);
     return;
@@ -92,8 +94,70 @@ export function renderHostPanel(root, game, onBack) {
     game.stopHosting();
     refresh();
   }));
+  wrap.appendChild(relaySection());
   wrap.appendChild(btn("Back", "btn", onBack));
   root.appendChild(wrap);
+}
+
+// ---------- relay (TURN) settings ----------
+// Strict/symmetric-NAT router pairs can't hole-punch a direct path; a TURN
+// relay is the standard fix. There's no reliable free public relay to bake in,
+// so players who need one paste credentials from a free provider account
+// (metered.ca, expressturn.com, …) — a web sign-up, nothing to install. Only
+// ONE side of a connection needs a relay configured. Applies to new
+// invites/joins after saving.
+function relaySection() {
+  const details = document.createElement("details");
+  details.className = "mp-relay";
+  const summary = document.createElement("summary");
+  const saved = getRelayConfig();
+  summary.textContent = saved ? "Relay server (configured ✓)" : "Relay server (optional — for strict routers)";
+  details.appendChild(summary);
+
+  const note = el("p", "mp-note",
+    "Can't connect to a friend even though both codes worked? One of your routers " +
+    "is likely blocking direct paths (symmetric NAT). Fix: a TURN relay — make a free " +
+    "account at a provider like expressturn.com or metered.ca (web sign-up, nothing to " +
+    "install), then paste the address plus the username and credential it gives you. " +
+    "All three are needed — a relay refuses connections without valid credentials. " +
+    "Only one of you needs this, and the relay only ever carries the encrypted stream.");
+  details.appendChild(note);
+
+  const mk = (label, value, placeholder) => {
+    details.appendChild(el("label", "field", label));
+    const i = document.createElement("input");
+    i.type = "text"; i.spellcheck = false; i.value = value || ""; i.placeholder = placeholder;
+    details.appendChild(i);
+    return i;
+  };
+  const urlsIn = mk("Relay address (server:port — several may be comma-separated)",
+    saved ? saved.urls.join(", ") : "", "free.expressturn.com:3478");
+  const userIn = mk("Username", saved ? saved.username : "", "from your provider account");
+  const credIn = mk("Credential", saved ? saved.credential : "", "from your provider account");
+
+  const status = el("p", "mp-note", "");
+  const showStatus = (cfg) => {
+    status.textContent = cfg
+      ? `In use: ${cfg.urls.join(", ")}${cfg.username ? "" : " — no username set, most relays need one"}`
+      : "";
+  };
+  showStatus(saved);
+
+  details.appendChild(btn("Save Relay", "btn small", () => {
+    const typed = urlsIn.value.trim();
+    const cfg = setRelayConfig(urlsIn.value, userIn.value, credIn.value);
+    if (typed && !cfg) {
+      notify("That doesn't look like a relay address — use server:port, e.g. free.expressturn.com:3478");
+      return;
+    }
+    summary.textContent = cfg ? "Relay server (configured ✓)" : "Relay server (optional — for strict routers)";
+    showStatus(cfg);
+    // reflect what was actually stored, so the normalised form is visible
+    if (cfg) urlsIn.value = cfg.urls.join(", ");
+    notify(cfg ? "Relay saved — used for new connections" : "Relay cleared");
+  }));
+  details.appendChild(status);
+  return details;
 }
 
 function rosterRow(name, onKick) {
@@ -147,6 +211,7 @@ export function renderJoinPanel(root, game, onBack) {
   });
   wrap.appendChild(goBtn);
   wrap.appendChild(replyBox);
+  wrap.appendChild(relaySection());
   wrap.appendChild(btn("Back", "btn", () => {
     if (client && !game.net) client.dispose(false);   // abandon a half-done join
     onBack();

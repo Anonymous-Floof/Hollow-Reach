@@ -34,17 +34,29 @@ export class Interact {
     // An interactable entity (boat/mob) closer than the targeted block takes the
     // click. Drops have no onInteract, so this is inert for them.
     const eHit = world.entities ? world.entities.raycast(eye, dir, 6) : null;
-    // Ghost entities (multiplayer mirrors) never run hooks locally: attacks are
-    // routed to the host, which owns the real entity. The local swing sound is
-    // the only prediction — damage numbers stay authoritative.
+    // Ghost entities (multiplayer mirrors): attacks are routed to the host,
+    // which owns the real entity — the local swing sound (and crit snap) is the
+    // only prediction, damage numbers stay authoritative. Right-clicks run the
+    // hook locally: uses that only touch OUR inventory (milking a cow) resolve
+    // instantly, and the boat hook handles its own mount handshake via ctx.net.
     if (eHit && eHit.entity.ghost && (!hit || eHit.dist < hit.dist)) {
       this.selection = null; this.reset();
-      if (opts.net && input.buttons.left && this._attackCD <= 0) {
+      if (!opts.net) return;
+      if (input.clicks.right) {
+        const edef = defOf(eHit.entity.type);
+        if (edef && edef.hooks && edef.hooks.onInteract) {
+          const ctx = { world, player, inventory, notify: opts.notify, input, net: opts.net };
+          edef.hooks.onInteract(eHit.entity, ctx, "right");
+        }
+      } else if (input.buttons.left && this._attackCD <= 0) {
         sfx.swing();
         const slot = inventory.selectedSlot();
         const held = slot ? slot.key : "";
-        if (eHit.entity.pid) opts.net.sendPlayerHit(eHit.entity.pid, held);
-        else if (eHit.entity.netId != null) opts.net.sendEntityHit(eHit.entity.netId, held);
+        const crit = player.vel[1] < -1 && !player.onGround && !player.flying &&
+          !player.swimming && !player.climbing;
+        if (crit) sfx.crit();
+        if (eHit.entity.pid) opts.net.sendPlayerHit(eHit.entity.pid, held, crit);
+        else if (eHit.entity.netId != null) opts.net.sendEntityHit(eHit.entity.netId, held, crit);
         this._attackCD = 0.45;
       }
       return;
@@ -279,9 +291,17 @@ export class Interact {
     // Boats aren't blocks — using one spawns a boat entity in the empty cell
     // (it floats if that's water, otherwise it falls and rests on the ground).
     if (item.type === "boat") {
-      // (v1 multiplayer: boat entities live on the host and can't be spawned or
-      // ridden by guests yet — riding transfers physics authority, a later pass)
-      if (world.netRole === "client") { if (opts.notify) opts.notify("Boats aren't synced in multiplayer yet"); return; }
+      // guests: the boat entity lives on the host — consume the item now
+      // (zero-latency prediction) and ask the host to spawn it; the boat
+      // appears via the next snapshot
+      if (world.netRole === "client") {
+        if (opts.net) {
+          opts.net.sendBoatSpawn([hit.nx + 0.5, hit.ny, hit.nz + 0.5]);
+          inventory.consumeSelected();
+          sfx.splash(false);
+        }
+        return;
+      }
       world.spawnBoat(hit.nx + 0.5, hit.ny, hit.nz + 0.5);
       inventory.consumeSelected();
       sfx.splash(false);

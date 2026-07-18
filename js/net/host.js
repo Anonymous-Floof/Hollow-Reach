@@ -20,6 +20,7 @@ import { BLOCKS, getBlock } from "../world/blocks.js";
 import { getItem } from "../game/items.js";
 import { defOf } from "../game/entities/registry.js";
 import { attackDamage } from "../game/entities/ai.js";
+import { SEAT_Y } from "../game/entities/boat.js";
 import { CX, CZ } from "../world/chunk.js";
 
 const PROTO = `${SAVE_VERSION}.${NET_VERSION}`;
@@ -117,6 +118,9 @@ export class NetHost {
       case "edit": return this._onEdit(st, msg);
       case "hit": return this._onHit(st, msg);
       case "phit": return this._onPHit(st, msg);
+      case "bmount": return this._onBMount(st, msg);
+      case "bspawn": return this._onBSpawn(st, msg);
+      case "warp": return this._onWarp(st);
       case "toss": return this._onToss(st, msg);
       case "sleep": return this._onSleep(st, msg);
       case "beReq": return this._onBEReq(st, msg);
@@ -172,6 +176,7 @@ export class NetHost {
       blockEntities: serializeEntities(world.blockEntities),
       player: stored ? stored.player : null,
       inventory: stored ? stored.inventory : null,
+      ownSpawn: stored && stored.spawn ? stored.spawn : null,   // guest's attuned Soul Anchor
     });
     const SLICE = 48 * 1024;
     const parts = Math.max(1, Math.ceil(payload.length / SLICE));
@@ -268,9 +273,10 @@ export class NetHost {
     if (dist3(st.lastPose, e.pos) > HIT_REACH) return;
     const def = defOf(e.type);
     if (!def || !def.hooks || !def.hooks.onInteract) return;
-    if (e.type === "boat") return;                    // no boat interactions over the wire (v1)
+    // a ridden boat can't be broken out from under its rider
+    if (e.type === "boat" && (e.data.rider || e.data.riderPid)) return;
     const heldOk = msg.held && getItem(msg.held) ? msg.held : null;
-    const ctx = this._shimCtx(st, heldOk);
+    const ctx = this._shimCtx(st, heldOk, msg.crit === 1);
     def.hooks.onInteract(e, ctx, "left");
     const vpos = [e.pos[0], e.pos[1] + e.h * 0.7, e.pos[2]];
     this._relaySfx("thwack", vpos);
@@ -283,7 +289,8 @@ export class NetHost {
     if (!st.active || !st.buckets.hit.take() || !st.lastPose) return;
     if (!okPid(msg.pid)) return;
     const heldOk = msg.held && getItem(msg.held) ? msg.held : null;
-    const dmg = attackDamage({ selectedSlot: () => heldOk ? { key: heldOk, count: 1 } : null });
+    const dmg = attackDamage({ selectedSlot: () => heldOk ? { key: heldOk, count: 1 } : null },
+      msg.crit === 1 ? fallingAttacker() : null);
     // victim: the host player, or another guest
     if (msg.pid === this.hostPid) {
       const hp = this.game.player;
@@ -310,8 +317,11 @@ export class NetHost {
   // attacker's position and a stand-in inventory holding their claimed tool.
   // Mutating hooks (damage/tool wear/notify) hit harmless no-ops. The world is
   // wrapped so death drops spawn as walk-over pickups (instant:false) — the
-  // kill belongs to the guest, not the host's auto-vacuum.
-  _shimCtx(st, heldKey) {
+  // kill belongs to the guest, not the host's auto-vacuum. When the guest
+  // claims a falling crit, the stand-in carries the mid-fall markers so
+  // attackDamage lands the ×1.5 (remote: true keeps the crit snap sound from
+  // playing on the host's speakers).
+  _shimCtx(st, heldKey, crit) {
     const slot = heldKey ? { key: heldKey, count: 1 } : null;
     const world = this.game.world;
     const w = Object.create(world);
@@ -320,14 +330,55 @@ export class NetHost {
       if (e) e.vel = [(Math.random() - 0.5) * 2, 2.2, (Math.random() - 0.5) * 2];
       return e;
     };
+    const p = crit ? fallingAttacker() : { vel: [0, 0, 0], onGround: true, remote: true };
+    p.pos = st.lastPose.slice(); p.health = 20; p.damage = () => {};
     return {
       world: w,
-      player: { pos: st.lastPose.slice(), vel: [0, 0, 0], health: 20, damage: () => {} },
+      player: p,
       inventory: { selectedSlot: () => slot, damageSelectedTool: () => false, totalDefense: () => 0 },
       notify: () => {},
       input: null,
       sky: this.game.sky,
     };
+  }
+
+  // A guest asked to ride (on=1) or leave (on=0) a boat.
+  _onBMount(st, msg) {
+    if (!st.active || !st.buckets.misc.take() || !st.lastPose) return;
+    const world = this.game.world;
+    const e = world.entities.entities.find((en) => en.id === msg.eid && !en.ghost && !en.dead && en.type === "boat");
+    if (msg.on === 0) {
+      if (e && e.data.riderPid === st.pid) e.data.riderPid = null;
+      return;
+    }
+    if (!e || e.data.rider || e.data.riderPid || dist3(st.lastPose, e.pos) > HIT_REACH) {
+      st.peer.send("bdeny", { eid: msg.eid });
+      return;
+    }
+    e.data.riderPid = st.pid;
+  }
+
+  // A guest placed a boat from the item (consumed client-side). Requests that
+  // can't be honoured (no pose yet — a just-joined race — or out of reach)
+  // refund the item instead of silently voiding it.
+  _onBSpawn(st, msg) {
+    if (!st.active || !st.buckets.misc.take()) return;
+    if (!st.lastPose || dist3(st.lastPose, msg.p) > 10) {
+      st.peer.send("give", { key: "boat", count: 1 });
+      return;
+    }
+    this.game.world.spawnBoat(msg.p[0], msg.p[1], msg.p[2]);
+  }
+
+  // A guest used a wayshard: a legitimate straight-up teleport that would
+  // otherwise trip the movement sanity check. Re-anchor their last-known pose
+  // at the surface the host computes for that column — same x/z, so this can't
+  // be abused as a free horizontal teleport.
+  _onWarp(st) {
+    if (!st.active || !st.buckets.misc.take() || !st.lastPose) return;
+    const world = this.game.world;
+    const ts = world.topSolidY(Math.floor(st.lastPose[0]), Math.floor(st.lastPose[2]));
+    if (ts >= 0) st.lastPose = [st.lastPose[0], ts + 1, st.lastPose[2]];
   }
 
   _onToss(st, msg) {
@@ -393,7 +444,8 @@ export class NetHost {
 
   _onPState(st, msg) {
     if (!st.pid || !st.buckets.misc.take()) return;
-    this.remoteStates[st.pid] = { name: st.name, player: msg.player, inventory: msg.inventory };
+    this.remoteStates[st.pid] = { name: st.name, player: msg.player, inventory: msg.inventory,
+      spawn: msg.spawn || null };
   }
 
   // ---------- per-frame ----------
@@ -403,6 +455,21 @@ export class NetHost {
 
     // interpolate remote-player ghosts (rendered on the host too)
     this.ghosts.tick(dt, now);
+
+    // boats ridden by guests follow their rider's reported pose (the guest
+    // simulates the ride client-side; the real boat is pinned under them here
+    // so everyone else sees it move). A vanished/faraway rider releases it.
+    for (const e of world.entities.entities) {
+      if (e.dead || e.ghost || e.type !== "boat" || !e.data.riderPid) continue;
+      const rider = this.peers.find((p) => p.pid === e.data.riderPid && p.active);
+      if (!rider || !rider.lastPose || dist3(rider.lastPose, e.pos) > 30) { e.data.riderPid = null; continue; }
+      e.pos[0] = rider.lastPose[0];
+      e.pos[1] = rider.lastPose[1] - SEAT_Y;
+      e.pos[2] = rider.lastPose[2];
+      e.vel[0] = e.vel[1] = e.vel[2] = 0;
+      const g = this.ghosts.players.get(e.data.riderPid);
+      if (g && g.e._buf.length) e.yaw = g.e._buf[g.e._buf.length - 1].yaw - Math.PI;
+    }
 
     // stream/simulation centres follow the guests
     const centers = [];
@@ -597,6 +664,10 @@ export class NetHost {
     if (st.pid) {
       this.ghosts.removePlayer(st.pid);
       this.sleepVotes.delete(st.pid);
+      // release any boat they were riding (it resumes normal physics in place)
+      for (const e of this.game.world.entities.entities) {
+        if (e.type === "boat" && e.data.riderPid === st.pid) e.data.riderPid = null;
+      }
       for (const [key, lock] of this.beLocks) if (lock.pid === st.pid) this.beLocks.delete(key);
       if (wasActive) {
         this._broadcast("pleave", { pid: st.pid }, null);
@@ -653,3 +724,9 @@ export function applyWireBE(be, wire) {
 
 function dist3(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); }
 function r2(v) { return Math.round(v * 100) / 100; }
+
+// Stand-in for a guest mid-fall so attackDamage() applies their claimed crit.
+// remote: true suppresses the crit sound host-side (it's the guest's hit).
+function fallingAttacker() {
+  return { vel: [0, -3, 0], onGround: false, flying: false, swimming: false, climbing: false, remote: true };
+}

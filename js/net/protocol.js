@@ -14,7 +14,7 @@
 // The host additionally applies *semantic* validation (reach, rate limits,
 // block-id whitelists) in host.js; this module only guarantees shape.
 
-export const NET_VERSION = 1;
+export const NET_VERSION = 2;   // v2: boat mount/spawn, wayshard warp, crit flags, guest spawn persistence
 
 // Hard caps (bytes of raw channel data). The world snapshot is streamed in
 // parts, so ordinary messages stay small.
@@ -76,8 +76,12 @@ export const SCHEMAS = {
               id: int(0, 1023), meta: int(0, 63) },                   // h→c rollback (authoritative cell)
 
   // actions
-  hit:      { eid: int(-1e9, 1e9), held: str(40) },                   // attack a host-owned entity (mob)
-  phit:     { pid: str(48), held: str(40) },                          // attack another player (PvP)
+  hit:      { eid: int(-1e9, 1e9), held: str(40), crit: opt(int(0, 1)) }, // attack a host-owned entity (mob/boat)
+  phit:     { pid: str(48), held: str(40), crit: opt(int(0, 1)) },    // attack another player (PvP)
+  bmount:   { eid: int(-1e9, 1e9), on: int(0, 1) },                   // c→h ride/leave a boat
+  bdeny:    { eid: int(-1e9, 1e9) },                                  // h→c mount refused (boat taken/gone)
+  bspawn:   { p: vec3(-POS, POS) },                                   // c→h place a boat from the item
+  warp:     {},                                                       // c→h wayshard vertical warp notice
   tp:       { p: vec3(-POS, POS) },                                   // h→c forced position (failed movement validation)
   toss:     { p: vec3(-POS, POS), d: vec3(-2, 2), key: str(40),
               count: int(1, 999), dura: opt(int(0, 9999)) },          // spawn a tossed drop
@@ -93,7 +97,8 @@ export const SCHEMAS = {
   beDeny:   { x: int(-POS, POS), y: int(0, 512), z: int(-POS, POS), reason: str(MAX_REASON) },
 
   // player persistence + lifecycle
-  pstate:   { player: { k: "pjson" }, inventory: { k: "ijson" } },    // c→h periodic (for host-side save)
+  pstate:   { player: { k: "pjson" }, inventory: { k: "ijson" },
+              spawn: opt(vec3(-POS, POS)) },                          // c→h periodic (for host-side save)
   bye:      {},                                                       // (both)
   pjoin:    { pid: str(48), name: str(MAX_NAME) },                    // h→c roster add
   pleave:   { pid: str(48) },                                         // h→c roster remove

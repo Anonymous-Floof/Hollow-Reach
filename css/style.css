@@ -491,6 +491,15 @@ select {
   word-break: break-all; box-sizing: border-box; margin: 6px 0;
 }
 .mp-code:focus { outline: 1px solid var(--accent-dark); }
+.mp-relay {
+  margin-top: 12px; padding: 8px 10px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+}
+.mp-relay summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.mp-relay[open] summary { margin-bottom: 6px; color: inherit; }
+.mp-relay input { width: 100%; margin-bottom: 6px; box-sizing: border-box; }
+.mp-relay label.field { display: block; margin-top: 4px; }
 
 /* floating names over remote players */
 #nameplates { position: fixed; inset: 0; pointer-events: none; z-index: 3; }

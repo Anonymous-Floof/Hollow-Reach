@@ -115,6 +115,7 @@ export class NetClient {
       case "sfx": { const fn = SFX_MAP[msg.kind]; if (fn) fn(msg.p); return; }
       case "beState": return this._onBEState(msg);
       case "beDeny": return this._onBEDeny(msg);
+      case "bdeny": return this._onBDeny(msg);
       case "pjoin":
         this.roster.set(msg.pid, msg.name);
         if (this.ghosts) this.ghosts.setPlayerName(msg.pid, msg.name);
@@ -226,6 +227,20 @@ export class NetClient {
     this.cb.onNotify(msg.reason);
   }
 
+  // Our optimistic boat mount was refused (someone got in first / boat gone):
+  // undo the local ride and hand the ghost back to snapshot interpolation.
+  _onBDeny(msg) {
+    if (!this.game) return;
+    const p = this.game.player;
+    if (p.mount && p.mount.ghost && p.mount.netId === msg.eid) {
+      p.mount.localPin = false;
+      p.mount = null;
+      p.pos[1] += 0.6;
+      p.vel = [0, 0, 0];
+      this.cb.onNotify("Someone else is in that boat");
+    }
+  }
+
   // ---------- outgoing actions (called from game code) ----------
   requestBE(kind, x, y, z) {
     this._bePending = { x, y, z, kind };
@@ -237,12 +252,15 @@ export class NetClient {
     this._beOpen = null;
     this.peer.send("beState", { x, y, z, be: localBEToWire(be), final: 1 });
   }
-  sendEntityHit(netId, heldKey) {
-    this.peer.send("hit", { eid: netId, held: heldKey || "" });
+  sendEntityHit(netId, heldKey, crit) {
+    this.peer.send("hit", { eid: netId, held: heldKey || "", crit: crit ? 1 : 0 });
   }
-  sendPlayerHit(pid, heldKey) {
-    this.peer.send("phit", { pid, held: heldKey || "" });
+  sendPlayerHit(pid, heldKey, crit) {
+    this.peer.send("phit", { pid, held: heldKey || "", crit: crit ? 1 : 0 });
   }
+  sendBoatMount(netId, on) { this.peer.send("bmount", { eid: netId, on: on ? 1 : 0 }); }
+  sendBoatSpawn(p) { this.peer.send("bspawn", { p: [p[0], p[1], p[2]] }); }
+  sendWarp() { this.peer.send("warp", {}); }
   sendToss(p, d, key, count, dura) {
     this.peer.send("toss", { p: [p[0], p[1], p[2]], d: [clampD(d[0]), clampD(d[1]), clampD(d[2])], key, count, dura });
   }
@@ -253,6 +271,7 @@ export class NetClient {
     this.peer.send("pstate", {
       player: this.game.player.toJSON(),
       inventory: this.game.inventory.toJSON(),
+      spawn: this.game.spawn ? [this.game.spawn[0], this.game.spawn[1], this.game.spawn[2]] : undefined,
     });
   }
 
@@ -375,6 +394,10 @@ function validateWorldPayload(v) {
   if (v.player && !player) return null;
   const inventory = v.inventory ? cleanInvJSON(v.inventory) : null;
   if (v.inventory && !inventory) return null;
+  // our own persisted spawn (Soul Anchor) — optional, tolerate absence/junk
+  const ownSpawn = (Array.isArray(v.ownSpawn) && v.ownSpawn.length === 3 &&
+    v.ownSpawn.every((n) => typeof n === "number" && Number.isFinite(n)))
+    ? [v.ownSpawn[0], v.ownSpawn[1], v.ownSpawn[2]] : null;
 
   return {
     name: v.name.slice(0, 28),
@@ -386,6 +409,7 @@ function validateWorldPayload(v) {
     blockEntities,
     player,
     inventory,
+    ownSpawn,
   };
 }
 function num0(n) { return (typeof n === "number" && Number.isFinite(n) && n >= 0) ? n : 0; }

@@ -57,7 +57,7 @@ export function attackDamage(inventory, attacker) {
   if (attacker && attacker.vel && attacker.vel[1] < -1 && !attacker.onGround &&
       !attacker.flying && !attacker.swimming && !attacker.climbing) {
     dmg *= 1.5;
-    sfx.crit();
+    if (!attacker.remote) sfx.crit();   // remote = a guest's hit relayed via the host
   }
   return dmg;
 }

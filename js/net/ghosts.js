@@ -53,6 +53,8 @@ export function buildEntTuples(entities) {
     } else if (NET_MOBS.has(e.type)) {
       a = e.data.health || 0;
       b = (e.data.hurtFlash || 0) > 0 ? 1 : 0;
+    } else if (e.type === "boat") {
+      a = (e.data.rider || e.data.riderPid) ? 1 : 0;   // occupied flag
     }
     out.push([e.id, ti, round2(e.pos[0]), round2(e.pos[1]), round2(e.pos[2]), round2(e.yaw), a, b]);
     if (out.length >= 256) break;
@@ -92,6 +94,8 @@ export class GhostWorld {
       } else if (NET_MOBS.has(type)) {
         e.data.health = a;
         if (b) e.data.hurtFlash = 0.3;
+      } else if (type === "boat" && !e.localPin) {
+        e.data.ridden = a === 1;   // our own ridden boat keeps its local state
       }
       pushSample(e._buf, now, x, y, z, yaw, 0);
     }
@@ -158,7 +162,9 @@ export class GhostWorld {
   tick(dt, now) {
     const t = now - INTERP_DELAY;
     for (const e of this.ents.values()) {
-      sampleInto(e, t);
+      // localPin: the local player is riding this ghost (boat) and simulates it
+      // directly — snapshot interpolation would drag it back through time
+      if (!e.localPin) sampleInto(e, t);
       if (e.data.hurtFlash > 0) e.data.hurtFlash = Math.max(0, e.data.hurtFlash - dt);
       if (e.type === "drop") { e.data.bob += dt * 3; e.yaw += dt * 1.6; }
     }

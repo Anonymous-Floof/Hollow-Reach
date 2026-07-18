@@ -239,19 +239,35 @@ short invite code (and a reply code) through any chat app you already use.
   and send back the reply code it generates. The host pastes that reply and
   hits Accept.
 
+Connections hole-punch a direct peer-to-peer path via public STUN. Some
+strict home routers (symmetric NAT) block every direct path — the standard
+fix is a **TURN relay**, and the Multiplayer panel has an optional **Relay
+server** section for exactly that: make a free account at a provider like
+[metered.ca](https://www.metered.ca/stun-turn) or
+[expressturn.com](https://www.expressturn.com) (a web sign-up — nothing to
+install), paste the TURN URL + username + credential, and save. Only **one**
+side of a connection needs a relay configured, and it only ever carries the
+already-encrypted stream. Brief network blips don't drop the session either:
+the connection gets a ~12-second grace window to recover before anyone is
+declared gone.
+
 The host's world is authoritative — they simulate mobs, water, forges and
 time; guests generate the same terrain locally from the shared seed and stay
 in sync via live edits and periodic snapshots. Your own movement, mining,
 building, crafting and inventory apply instantly on your end regardless of
 ping; only seeing *someone else's* edits, combat, and container access wait on
-the connection, so play stays responsive even at high latency. A guest's
-inventory and position are saved inside the host's world and restored if they
-reconnect — and while connected as a guest, the world-list "Export World"
-button becomes **Leave World** instead, since it's the host's save, not yours.
+the connection, so play stays responsive even at high latency. Guests can do
+everything the host can: place, ride and break **boats** (riding is predicted
+client-side, so it feels instant), **milk cows**, use **Wayshards**, land
+falling **critical hits**, and attune a **Soul Anchor** — a guest's spawn
+point, inventory and position are all saved inside the host's world and
+restored if they reconnect. While connected as a guest, the world-list
+"Export World" button becomes **Leave World** instead, since it's the host's
+save, not yours.
 
-Known limits (for now): no relay server, so some strict home-router
-combinations can't reach each other directly; guests can't place or ride
-boats; and both players need to be on the same version of the game.
+Known limits (for now): both players need to be on the same version of the
+game, and a strict-NAT/strict-NAT pairing won't connect until one side
+configures a relay (see above).
 
 ## Architecture (built to be extended)
 

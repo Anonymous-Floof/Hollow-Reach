@@ -29,6 +29,7 @@ import { saveWorld, newId } from "./save/storage.js";
 import { exportWorld } from "./save/transfer.js";
 import { NetHost } from "./net/host.js";
 import { NetClient } from "./net/client.js";
+import { clientRideBoat } from "./game/entities/boat.js";
 import { localPlayerId, getPlayerName } from "./net/protocol.js";
 import { Nameplates } from "./ui/mpui.js";
 import { WorldMap } from "./ui/map.js";
@@ -469,7 +470,8 @@ class Game {
     this.inventory = payload.inventory ? Inventory.fromJSON(payload.inventory) : new Inventory();
     this.invUI.inv = this.inventory;
     this.sky.time = payload.time;
-    this.spawn = payload.spawn.slice();
+    // ownSpawn = the Soul Anchor spot we attuned in a previous session on this host
+    this.spawn = payload.ownSpawn ? payload.ownSpawn.slice() : payload.spawn.slice();
     const startPos = payload.player ? payload.player.pos : payload.spawn;
     this.player = new Player(startPos[0], startPos[1], startPos[2]);
     if (payload.player) this.player.loadJSON(payload.player);
@@ -654,6 +656,12 @@ class Game {
     const isClient = this.net && this.net.isClient;
     const isHost = this.net && this.net.isHost;
 
+    // guests riding a ghost boat simulate the ride locally (their pose stream
+    // carries it; the host pins the real boat underneath them)
+    if (isClient && this.player.mount && this.player.mount.ghost) {
+      clientRideBoat(this.player.mount, dt, this.player, input, this.world, this.net, notify);
+    }
+
     this.world.renderDist = Settings.get("renderDistance");
     this.world.update(this.player.pos[0], this.player.pos[2], 4, 6);
     if (!isClient) this.world.tickBlockEntities(dt);
@@ -767,7 +775,7 @@ class Game {
   // Wayshard: consume to warp to the surface directly above. Returns true if
   // the warp happened (the caller then consumes the item).
   useWayshard() {
-    if (this.net && this.net.isClient) { notify("Wayshards aren't synced in multiplayer yet"); return false; }
+    if (this.player.mount) { notify("Not while riding — dismount first"); return false; }
     const p = this.player.pos;
     const ts = this.world.topSolidY(Math.floor(p[0]), Math.floor(p[2]));
     if (ts < 0) { notify("The wayshard can't find the sky here"); return false; }
@@ -775,6 +783,9 @@ class Game {
     this.player.pos = [p[0], ts + 1, p[2]];
     this.player.vel = [0, 0, 0];
     this.player._fallStart = null;
+    // tell the host this vertical jump is a wayshard, not a speed hack, so the
+    // movement sanity check doesn't snap us back underground
+    if (this.net && this.net.isClient) this.net.sendWarp();
     sfx.warp();
     notify("The wayshard shatters — daylight.");
     return true;
@@ -782,7 +793,13 @@ class Game {
 
   respawn() {
     sfx.died();
-    if (this.player.mount) { this.player.mount.data.rider = false; this.player.mount = null; }
+    if (this.player.mount) {
+      const m = this.player.mount;
+      m.data.rider = false;
+      m.localPin = false;
+      if (m.ghost && this.net && this.net.isClient && m.netId != null) this.net.sendBoatMount(m.netId, false);
+      this.player.mount = null;
+    }
     // pin a death waypoint on the atlas (replacing the previous one)
     if (Settings.get("deathWaypoints")) {
       const [px, py, pz] = this.player.pos;

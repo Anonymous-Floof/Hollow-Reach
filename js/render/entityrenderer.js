@@ -29,7 +29,7 @@ export class EntityRenderer {
     this.blockCubes = new Map();   // blockId -> mesh
     this.flatSprites = new Map();   // blockId -> flat sprite mesh (cross blocks)
     this.flatCube = null;          // shared untextured cube
-    this.boatMesh = null;          // shared planks-textured hull
+    this.boatMesh = null;          // shared wooden rowboat (multi-box hull)
     this.sheepMesh = null;         // shared white sheep (body + head + legs)
     this.pigMesh = null;           // shared pink pig
     this.cowMesh = null;           // shared brown-and-white cow
@@ -291,8 +291,24 @@ export class EntityRenderer {
   }
   boat() {
     if (!this.boatMesh) {
-      const uv = this.atlas.uvForName("planks");
-      this.boatMesh = this._buildBox(0.5, 0.18, 0.7, () => uv);
+      // +z = forward (the bow). A proper rowboat: dark keel slab, plank side
+      // walls and stern, a two-step tapered bow with a small foredeck, pale
+      // interior floor and seat bench, and darker gunwale caps along the rims.
+      // Origin at the hull bottom (yOff 0); waterline rides at y≈0.18.
+      const WOOD = [0.63, 0.47, 0.29], DARK = [0.45, 0.33, 0.20], LIGHT = [0.74, 0.59, 0.40];
+      const keel = { c: [0, 0.06, -0.04], h: [0.42, 0.06, 0.60], col: DARK };
+      const floor = { c: [0, 0.145, -0.04], h: [0.38, 0.025, 0.56], col: LIGHT };
+      const wall = (x) => ({ c: [x, 0.27, -0.06], h: [0.075, 0.15, 0.54], col: WOOD });
+      const stern = { c: [0, 0.27, -0.60], h: [0.44, 0.15, 0.075], col: WOOD };
+      const bowA = { c: [0, 0.27, 0.53], h: [0.34, 0.15, 0.075], col: WOOD };
+      const bowB = { c: [0, 0.29, 0.65], h: [0.20, 0.13, 0.06], col: WOOD };
+      const bowTip = { c: [0, 0.32, 0.735], h: [0.08, 0.10, 0.035], col: DARK };
+      const rim = (x) => ({ c: [x, 0.435, -0.06], h: [0.085, 0.02, 0.55], col: DARK });
+      const sternRim = { c: [0, 0.435, -0.60], h: [0.455, 0.02, 0.09], col: DARK };
+      const seat = { c: [0, 0.24, -0.30], h: [0.36, 0.03, 0.11], col: LIGHT };
+      const deck = { c: [0, 0.40, 0.55], h: [0.20, 0.022, 0.16], col: LIGHT };
+      this.boatMesh = this._buildMultiBox([keel, floor, wall(0.44), wall(-0.44), stern,
+        bowA, bowB, bowTip, rim(0.44), rim(-0.44), sternRim, seat, deck]);
     }
     return this.boatMesh;
   }
@@ -311,7 +327,7 @@ export class EntityRenderer {
       return { mesh: this.unitCube(), textured: false, tint: col, yOff: HS };
     }
     if (e.type === "boat") {
-      return { mesh: this.boat(), textured: true, tint: [0.78, 0.62, 0.38], yOff: 0.18 };
+      return { mesh: this.boat(), textured: false, tint: [1, 1, 1], yOff: 0 };
     }
     if (e.type === "sheep") {
       const hurt = e.data && e.data.hurtFlash > 0;

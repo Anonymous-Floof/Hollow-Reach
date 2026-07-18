@@ -10,16 +10,96 @@
 import { decode, encode, MAX_MSG } from "./protocol.js";
 import { gatherComplete } from "./signal.js";
 
-// Public STUN only helps the two sides find each other (NAT hole punching);
-// no game data ever touches it. Symmetric-NAT pairs may still fail — that's
-// the price of serverless P2P.
-const ICE = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+// STUN discovers each side's public address for NAT hole punching; no game
+// data ever touches it. When a direct path can't be punched (strict/symmetric
+// NAT, port-forward-limited routers), a TURN relay is the only fix — there is
+// no reliable free public one (Open Relay is gone), so the player can paste
+// their own relay credentials in the Multiplayer panel (see getRelayConfig).
+// A relay only ever carries the DTLS-encrypted stream, and only one side of a
+// connection needs to have one configured.
+const STUN = [{ urls: [
+  "stun:stun.l.google.com:19302",
+  "stun:stun1.l.google.com:19302",
+  "stun:stun.cloudflare.com:3478",
+] }];
+
+const DISCONNECT_GRACE_MS = 12000;   // how long ICE gets to recover before we give up
+
+// ---- user-configured TURN relay (persisted locally, never sent anywhere) ----
+const RELAY_KEY = "hollowreach.relay";
+
+// Normalise one pasted relay address into an RTCIceServer url. Providers
+// present these every which way ("free.expressturn.com:3478", "turn:host:3478",
+// a full "turn:host:443?transport=tcp"), so a bare host[:port] is assumed to be
+// turn: rather than rejected. Returns null for things that clearly aren't a
+// relay (a stun:/http:// address, or junk).
+export function normalizeRelayUrl(raw) {
+  const s = String(raw || "").trim().replace(/^["']|["']$/g, "");
+  if (!s) return null;
+  const scheme = /^(turns?):(.*)$/i.exec(s);
+  if (scheme) return scheme[1].toLowerCase() + ":" + scheme[2];
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return null;   // https://…, ws://…
+  // Any OTHER explicit scheme (stun:, sip:…) isn't a relay. Note a bare
+  // "host:port" is not a scheme even though a hostname is made of
+  // scheme-legal characters — what follows the colon there is just a port.
+  if (/^[a-z][a-z0-9+.-]*:(?!\d{1,5}(\?|$))/i.test(s)) return null;
+  // bare host[:port][?transport=…] — must at least look like a hostname/IP
+  if (!/^[a-z0-9.-]+(:\d{1,5})?(\?[\w=&-]*)?$/i.test(s)) return null;
+  return "turn:" + s;
+}
+
+// Parse the saved/entered url field into the list ICE will actually use.
+function parseRelayUrls(field) {
+  const out = [];
+  for (const tok of String(field || "").split(/[\s,]+/)) {
+    const u = normalizeRelayUrl(tok);
+    if (u && !out.includes(u)) out.push(u);
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+export function getRelayConfig() {
+  try {
+    const raw = localStorage.getItem(RELAY_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw);
+    if (!v || typeof v !== "object") return null;
+    const urls = parseRelayUrls(v.urls);
+    if (!urls.length) return null;
+    const cfg = { urls };
+    if (v.username) cfg.username = String(v.username).slice(0, 256);
+    if (v.credential) cfg.credential = String(v.credential).slice(0, 256);
+    return cfg;
+  } catch {
+    return null;
+  }
+}
+
+// Save (or clear, with an empty urls string) the relay config. Returns the
+// parsed config actually in effect, or null.
+export function setRelayConfig(urls, username, credential) {
+  try {
+    if (!urls || !String(urls).trim()) { localStorage.removeItem(RELAY_KEY); return null; }
+    localStorage.setItem(RELAY_KEY, JSON.stringify({
+      urls: String(urls).trim(),
+      username: String(username || "").trim(),
+      credential: String(credential || "").trim(),
+    }));
+  } catch { /* storage unavailable */ }
+  return getRelayConfig();
+}
+
+function iceServers() {
+  const relay = getRelayConfig();
+  return relay ? [...STUN, relay] : STUN;
+}
 
 export class Peer {
   // role: "host" creates the channels (and the offer); "client" receives them.
   constructor(role) {
     this.role = role;
-    this.pc = new RTCPeerConnection({ iceServers: ICE });
+    this.pc = new RTCPeerConnection({ iceServers: iceServers() });
     this.rel = null;      // reliable ordered channel
     this.fast = null;     // unreliable unordered channel
     this.open = false;
@@ -31,7 +111,15 @@ export class Peer {
 
     this.pc.addEventListener("connectionstatechange", () => {
       const s = this.pc.connectionState;
-      if (s === "failed" || s === "disconnected" || s === "closed") this._handleClose();
+      if (s === "failed" || s === "closed") this._handleClose();
+      else if (s === "disconnected") {
+        // often transient (wifi blip, route change): give ICE a window to
+        // recover before declaring the peer gone
+        clearTimeout(this._discoT);
+        this._discoT = setTimeout(() => {
+          if (this.pc.connectionState !== "connected") this._handleClose();
+        }, DISCONNECT_GRACE_MS);
+      } else if (s === "connected") clearTimeout(this._discoT);
     });
 
     if (role === "host") {
@@ -66,6 +154,7 @@ export class Peer {
 
   _handleClose() {
     if (this.closed) return;
+    clearTimeout(this._discoT);
     this.closed = true;
     this.open = false;
     if (this.onClose) this.onClose(this);
@@ -103,6 +192,7 @@ export class Peer {
 
   close() {
     this.closed = true;
+    clearTimeout(this._discoT);
     this.open = false;
     try { if (this.rel) this.rel.close(); } catch { /* already closed */ }
     try { if (this.fast) this.fast.close(); } catch { /* already closed */ }

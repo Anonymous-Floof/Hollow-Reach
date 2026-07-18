@@ -73,7 +73,10 @@ export async function decodeSignal(text) {
 
 // Resolves once ICE gathering completes (or after timeoutMs — whatever has
 // gathered by then still works on most networks, it just has fewer candidates).
-export function gatherComplete(pc, timeoutMs = 4000) {
+// The timeout leaves room for TURN relay allocation on slow links: relay
+// candidates are the only route across strict-NAT pairs, so losing them to an
+// eager cutoff would break exactly the users who need them.
+export function gatherComplete(pc, timeoutMs = 6500) {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
   return new Promise((resolve) => {
     const done = () => { clearTimeout(timer); pc.removeEventListener("icegatheringstatechange", check); resolve(); };
