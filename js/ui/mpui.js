@@ -131,7 +131,7 @@ function relaySection() {
     return i;
   };
   const urlsIn = mk("Relay address (server:port — several may be comma-separated)",
-    saved ? saved.urls.join(", ") : "", "free.expressturn.com:3478");
+    saved ? saved.urls.join(", ") : "", "your-relay.example.com:1234");
   const userIn = mk("Username", saved ? saved.username : "", "from your provider account");
   const credIn = mk("Credential", saved ? saved.credential : "", "from your provider account");
 
@@ -147,7 +147,7 @@ function relaySection() {
     const typed = urlsIn.value.trim();
     const cfg = setRelayConfig(urlsIn.value, userIn.value, credIn.value);
     if (typed && !cfg) {
-      notify("That doesn't look like a relay address — use server:port, e.g. free.expressturn.com:3478");
+      notify("That doesn't look like a relay address — use server:port, e.g. relay.example.com:1234");
       return;
     }
     summary.textContent = cfg ? "Relay server (configured ✓)" : "Relay server (optional — for strict routers)";

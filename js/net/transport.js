@@ -17,11 +17,13 @@ import { gatherComplete } from "./signal.js";
 // their own relay credentials in the Multiplayer panel (see getRelayConfig).
 // A relay only ever carries the DTLS-encrypted stream, and only one side of a
 // connection needs to have one configured.
-const STUN = [{ urls: [
-  "stun:stun.l.google.com:19302",
-  "stun:stun1.l.google.com:19302",
-  "stun:stun.cloudflare.com:3478",
-] }];
+const STUN = [{
+  urls: [
+    "stun:stun.l.google.com:19302",
+    "stun:stun1.l.google.com:19302",
+    "stun:stun.cloudflare.com:3478",
+  ]
+}];
 
 const DISCONNECT_GRACE_MS = 12000;   // how long ICE gets to recover before we give up
 
@@ -29,8 +31,8 @@ const DISCONNECT_GRACE_MS = 12000;   // how long ICE gets to recover before we g
 const RELAY_KEY = "hollowreach.relay";
 
 // Normalise one pasted relay address into an RTCIceServer url. Providers
-// present these every which way ("free.expressturn.com:3478", "turn:host:3478",
-// a full "turn:host:443?transport=tcp"), so a bare host[:port] is assumed to be
+// present these every which way ("relay.example.com:1234", "turn:host:1234",
+// a full "turn:host:123?transport=tcp"), so a bare host[:port] is assumed to be
 // turn: rather than rejected. Returns null for things that clearly aren't a
 // relay (a stun:/http:// address, or junk).
 export function normalizeRelayUrl(raw) {
