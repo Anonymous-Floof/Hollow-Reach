@@ -9,11 +9,11 @@ feature updates, **PATCH** for fixes and tuning.
 
 `tools/release.py` reads this file: whatever sits under a version's heading
 becomes the GitHub release notes for that version, so write entries for
-players, not for the git log. Day-to-day changes go under **[Unreleased]**;
+players, not for the git log. Day-to-day changes go under **[Latest]**;
 `python tools/release.py bump <major|minor|patch>` moves them under a new
 version heading when it's time to ship.
 
-## [Unreleased]
+## [Latest]
 
 ## [1.1.0] - 2026-07-19
 
