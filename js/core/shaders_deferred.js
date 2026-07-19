@@ -333,17 +333,25 @@ in vec2 vUV;
 uniform sampler2D uAtlas;
 void main(){ if(texture(uAtlas,vUV).a<0.5) discard; }`;
 
+// uCutout: textured entity meshes (dropped items) discard transparent texels so
+// a dropped sword shadows as a sword, not as its bounding quad. Untextured mob
+// meshes pack colours into the UV slots, so they must draw with uCutout=0.
 export const SHADOW_ENTITY_VS = `#version 300 es
 precision highp float;
 layout(location=0) in vec3 aPos;
+layout(location=1) in vec2 aUV;
 layout(location=3) in float aSky;
 uniform mat4 uLightVP, uModel;
 ${BONE_GLSL}
-void main(){ gl_Position=uLightVP*uModel*vec4(bonePos(aPos,aSky),1.0); }`;
+out vec2 vUV;
+void main(){ vUV=aUV; gl_Position=uLightVP*uModel*vec4(bonePos(aPos,aSky),1.0); }`;
 
 export const SHADOW_ENTITY_FS = `#version 300 es
 precision highp float;
-void main(){}`;
+in vec2 vUV;
+uniform sampler2D uAtlas;
+uniform float uCutout;
+void main(){ if(uCutout>0.5 && texture(uAtlas,vUV).a<0.5) discard; }`;
 
 // ---- fullscreen helpers ---------------------------------------------------
 

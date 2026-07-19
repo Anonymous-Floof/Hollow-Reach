@@ -21,7 +21,8 @@ import {
 import { mat4, aabbInFrustum } from "../core/mat4.js";
 import { Camera } from "../core/camera.js";
 import { CX, CZ, WH } from "../world/chunk.js";
-import { getBlock, texForFace, emitOf, lightColorOf } from "../world/blocks.js";
+import { emitOf, lightColorOf } from "../world/blocks.js";
+import { getItem } from "../game/items.js";
 import { EntityRenderer } from "./entityrenderer.js";
 import { GBuffer } from "./gbuffer.js";
 import { PANO_DIRS, PANO_UPS } from "./panorama.js";
@@ -465,9 +466,14 @@ export class Renderer {
     return blur;
   }
 
-  render(world, camera, sky, selection, heldBlockId, bob, underwater = 0) {
+  // `heldItem` is the selected hotbar item's key (any item — the viewmodel
+  // draws blocks and sprite items alike); block-item keys also feed the
+  // held-light glow in collectLights.
+  render(world, camera, sky, selection, heldItem, bob, underwater = 0) {
     const gl = this.gl;
     const time = performance.now() * 0.001;
+    let heldBlockId = 0;
+    if (heldItem) { const hit = getItem(heldItem); if (hit && hit.type === "block") heldBlockId = hit.blockId; }
     const W = gl.canvas.width, H = gl.canvas.height;
     this.gbuffer.resize(W, H, this.quality.scale);
     const fog = sky.fogColor();
@@ -697,7 +703,7 @@ export class Renderer {
     }
 
     if (selection) this.drawSelection(camera, selection);
-    if (heldBlockId) this.drawHeld(camera, heldBlockId, sky, bob);
+    if (heldItem) this.drawHeld(camera, heldItem, sky, bob);
 
     // ================= Pass 2c: god-rays (half-res, into an aux target) =======
     const gr = this.renderGodrays(camera, sky);
@@ -753,16 +759,16 @@ export class Renderer {
     gl.drawArrays(gl.LINES, 0, 24);
   }
 
-  // A small held-block viewmodel in the lower-right, drawn forward into the lit
-  // buffer with depth off (always on top). `bob` = {phase, mag} sways it.
-  drawHeld(camera, blockId, sky, bob) {
+  // The held viewmodel in the lower-right, drawn forward into the lit buffer
+  // with depth off (always on top). Any item renders: the mesh comes from the
+  // shared item-model cache (the same model its dropped entity uses), posed
+  // once per item and depth-sorted CPU-side since there's no usable depth
+  // buffer here. `bob` = {phase, mag} sways it while walking.
+  drawHeld(camera, itemKey, sky, bob) {
     const gl = this.gl;
-    const block = getBlock(blockId);
-    if (block.render !== "cube" && block.render !== "cross") return;
-    if (this.heldId !== blockId) {
-      if (block.render === "cross") this._buildHeldFlat(blockId);
-      else this._buildHeld(blockId);
-      this.heldId = blockId;
+    if (this.heldId !== itemKey) {
+      this._buildHeld(itemKey);
+      this.heldId = itemKey;
     }
     if (!this.heldMesh) return;
 
@@ -794,62 +800,66 @@ export class Renderer {
     gl.enable(gl.DEPTH_TEST);
   }
 
-  // Held view model for a sprite item (torch): one flat, slightly tilted quad.
-  _buildHeldFlat(blockId) {
-    const gl = this.gl;
-    const block = getBlock(blockId);
-    const [u0, v0, u1, v1] = this.atlas.uvForName(block.tex.all);
-    const cx = 0.62, cy = -0.66, cz = -1.05, w = 0.19, h = 0.3, tilt = -0.35;
-    const ca = Math.cos(tilt), sa = Math.sin(tilt);
-    const P = (sx, sy, u, v) => {
-      const x = sx * w, y = sy * h, z = 0;
-      const rx = ca * x + sa * z, rz = -sa * x + ca * z;
-      return [rx + cx, y + cy + h, rz + cz, u, v, 1, 1, 0];
-    };
-    const c = [P(-1, -1, u0, v1), P(1, -1, u1, v1), P(1, 1, u1, v0), P(-1, 1, u0, v0)];
-    const verts = [];
-    const push = (p) => verts.push(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]);
-    push(c[0]); push(c[1]); push(c[2]); push(c[0]); push(c[2]); push(c[3]);
-    this._uploadHeld(verts);
-  }
-
-  _buildHeld(blockId) {
-    const gl = this.gl;
-    const block = getBlock(blockId);
-    const verts = [];
-    const FACES = [
-      { d: [1, 0, 0], f: 0, sh: 0.7 }, { d: [-1, 0, 0], f: 1, sh: 0.7 },
-      { d: [0, 1, 0], f: 2, sh: 1.0 }, { d: [0, -1, 0], f: 3, sh: 0.5 },
-      { d: [0, 0, 1], f: 4, sh: 0.85 }, { d: [0, 0, -1], f: 5, sh: 0.85 },
-    ];
-    const ax = Math.PI / 6, ay = -Math.PI / 5;
-    const ca = Math.cos(ay), sa = Math.sin(ay), cb = Math.cos(ax), sb = Math.sin(ax);
-    const place = [0.62, -0.55, -1.15], scale = 0.5;
-    const rot = (x, y, z) => {
-      let rx = ca * x + sa * z, rz = -sa * x + ca * z, ry = y;
-      const oy = cb * ry - sb * rz, oz = sb * ry + cb * rz;
-      return [rx * scale + place[0], oy * scale + place[1], oz * scale + place[2]];
-    };
-    for (const fc of FACES) {
-      const uv = this.atlas.uvForName(texForFace(block, fc.f));
-      const [u0, v0, u1, v1] = uv;
-      const n = fc.d;
-      const t = n[0] !== 0 ? [0, 0, 1] : (n[1] !== 0 ? [1, 0, 0] : [1, 0, 0]);
-      const b = n[0] !== 0 ? [0, 1, 0] : (n[1] !== 0 ? [0, 0, 1] : [0, 1, 0]);
-      const center = [n[0] * 0.5, n[1] * 0.5, n[2] * 0.5];
-      const pts = [];
-      for (let j = 0; j < 2; j++) for (let i = 0; i < 2; i++) {
-        const px = center[0] + t[0] * (i - 0.5) + b[0] * (j - 0.5);
-        const py = center[1] + t[1] * (i - 0.5) + b[1] * (j - 0.5);
-        const pz = center[2] + t[2] * (i - 0.5) + b[2] * (j - 0.5);
-        const r = rot(px, py, pz);
-        pts.push([r[0], r[1], r[2], i ? u1 : u0, j ? v0 : v1, fc.sh, 1, 0]);
-      }
-      const push = (pp) => verts.push(pp[0], pp[1], pp[2], pp[3], pp[4], pp[5], pp[6], pp[7]);
-      push(pts[0]); push(pts[1]); push(pts[3]);
-      push(pts[0]); push(pts[3]); push(pts[2]);
+  // Build the posed viewmodel for an item: take its shared unit-space model,
+  // bake the hand pose (scale → roll → tilt → turn → place) into the vertices
+  // on the CPU, then sort triangles back-to-front so the depth-off draw
+  // self-occludes correctly (the old cube path drew its bottom face over its
+  // top face). The pose is fixed per item, so this runs only on hotbar changes.
+  //
+  // Poses (anchor = the sprite's bottom centre, i.e. a tool's handle butt):
+  //  shape — blocks, the classic three-quarter cube view low in the corner.
+  //  tool  — handle in the hand at the bottom-right, rolled so the head leans
+  //          up-left toward the screen centre, tipped away into the scene, and
+  //          turned so the flat of the head reads diagonally, not face-on.
+  //  sprite — other items: mostly face-on with a hint of roll and edge.
+  _buildHeld(itemKey) {
+    const src = this.entityRenderer.itemMeshes.get(itemKey);
+    if (!src) {
+      if (this.heldMesh) { this.gl.deleteVertexArray(this.heldMesh.vao); this.gl.deleteBuffer(this.heldMesh.vbo); }
+      this.heldMesh = null;
+      return;
     }
-    this._uploadHeld(verts);
+    const it = getItem(itemKey);
+    let pose;
+    if (src.kind === "shape") pose = { place: [0.95, -0.80, -1.02], ry: -Math.PI / 5, rx: Math.PI / 6, rz: 0, sc: 0.46 };
+    else if (it && it.toolType === "sword") pose = { place: [1.18, -1.04, -0.90], ry: -0.55, rx: -0.42, rz: 0.12, sc: 0.85 };
+    else if (it && it.type === "tool") pose = { place: [1.12, -1.04, -0.90], ry: -0.55, rx: -0.42, rz: 0.62, sc: 0.85 };
+    else pose = { place: [1.00, -0.90, -0.92], ry: -0.38, rx: 0.05, rz: 0.15, sc: 0.62 };
+    // Swords' art draws the hilt bottom-left/blade top-right — correct for the
+    // icon (matches convention), but that puts the blade toward the outer edge
+    // and the hilt toward screen centre once posed: backwards from a held grip.
+    // Mirror just the sword's local x so the hilt lands in the hand (outward,
+    // bottom-right) and the blade reaches toward the crosshair (inward,
+    // up-left), matching pick/axe/shovel whose centred art needs no mirroring.
+    const mirror = (it && it.toolType === "sword") ? -1 : 1;
+    const cz = Math.cos(pose.rz), sz = Math.sin(pose.rz);
+    const cx = Math.cos(pose.rx), sx = Math.sin(pose.rx);
+    const cy = Math.cos(pose.ry), sy = Math.sin(pose.ry);
+    const d = src.data, n = d.length / 8;
+    const out = new Float32Array(d);
+    for (let i = 0; i < n; i++) {
+      const o = i * 8;
+      const x0 = d[o] * pose.sc * mirror, y0 = d[o + 1] * pose.sc, z = d[o + 2] * pose.sc;
+      const x = cz * x0 - sz * y0, y = sz * x0 + cz * y0;        // roll about Z (lean the head left)
+      const ty = cx * y - sx * z, tz = sx * y + cx * z;          // tilt about X (tip into the scene)
+      out[o] = cy * x + sy * tz + pose.place[0];                  // turn about Y (show the edge)
+      out[o + 1] = ty + pose.place[1];
+      out[o + 2] = -sy * x + cy * tz + pose.place[2];
+      // the shared mesh zeroes this slot (it's the entity program's bone index);
+      // here it's the forward program's aSky — full sky light for the viewmodel
+      out[o + 6] = 1;
+    }
+    // back-to-front: camera looks down -z, so draw ascending z (farthest first)
+    const tris = [];
+    for (let t = 0; t < n / 3; t++) {
+      const o = t * 24;
+      tris.push([out[o + 2] + out[o + 10] + out[o + 18], o]);
+    }
+    tris.sort((a, b) => a[0] - b[0]);
+    const sorted = new Float32Array(d.length);
+    let w = 0;
+    for (const [, o] of tris) { sorted.set(out.subarray(o, o + 24), w); w += 24; }
+    this._uploadHeld(sorted);
   }
 
   _uploadHeld(verts) {

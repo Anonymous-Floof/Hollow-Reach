@@ -1,12 +1,12 @@
-// Draws entities as small textured cubes with a per-instance model matrix.
-// Block-item drops use the block's atlas faces; other items use a flat cube
-// tinted by the item's colour. Meshes are built once and cached.
+// Draws entities with a per-instance model matrix. Dropped items use the
+// shared item-model cache (render/itemmesh.js) — the same meshes the held
+// viewmodel draws — so a dropped stair is stair-shaped and a dropped sword is
+// its extruded sprite. Mobs are untextured multi-box meshes built here.
 
 import { createProgram } from "../core/gl.js";
 import { GBUF_ENTITY_VS, GBUF_ENTITY_FS } from "../core/shaders_deferred.js";
 import { mat4 } from "../core/mat4.js";
-import { getBlock, texForFace } from "../world/blocks.js";
-import { getItem } from "../game/items.js";
+import { ItemMeshCache } from "./itemmesh.js";
 import { CX } from "../world/chunk.js";
 
 const HS = 0.22;   // cube half-size
@@ -26,9 +26,8 @@ export class EntityRenderer {
     this.gl = gl;
     this.atlas = atlas;
     this.prog = createProgram(gl, GBUF_ENTITY_VS, GBUF_ENTITY_FS, ["aPos", "aUV", "aShade", "aSky", "aBlock"]);
-    this.blockCubes = new Map();   // blockId -> mesh
-    this.flatSprites = new Map();   // blockId -> flat sprite mesh (cross blocks)
-    this.flatCube = null;          // shared untextured cube
+    this.itemMeshes = new ItemMeshCache(gl, atlas);   // dropped/held item models
+    this.flatCube = null;          // shared untextured cube (unknown-item fallback)
     this.boatMesh = null;          // shared wooden rowboat (multi-box hull)
     this.sheepMesh = null;         // shared white sheep (body + head + legs)
     this.pigMesh = null;           // shared pink pig
@@ -207,82 +206,6 @@ export class EntityRenderer {
     return m;
   }
 
-  // A flat double-sided quad (cull is disabled when drawing), for sprite items
-  // like the torch so they're a 2D plane instead of a textured cube.
-  _buildFlat(uv) {
-    const gl = this.gl;
-    const [u0, v0, u1, v1] = uv;
-    const h = HS;
-    const d = [
-      -h, -h, 0, u0, v1, 1, 0, 0, h, -h, 0, u1, v1, 1, 0, 0, h, h, 0, u1, v0, 1, 0, 0,
-      -h, -h, 0, u0, v1, 1, 0, 0, h, h, 0, u1, v0, 1, 0, 0, -h, h, 0, u0, v0, 1, 0, 0,
-    ];
-    const arr = new Float32Array(d);
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    const vbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 32, 0);
-    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 12);
-    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 32, 20);
-    gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 32, 24);
-    gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 1, gl.FLOAT, false, 32, 28);
-    gl.bindVertexArray(null);
-    return { vao, vbo, count: arr.length / 8 };
-  }
-
-  flatSprite(blockId) {
-    let m = this.flatSprites.get(blockId);
-    if (!m) {
-      const block = getBlock(blockId);
-      m = this._buildFlat(this.atlas.uvForName(block.tex.all));
-      this.flatSprites.set(blockId, m);
-    }
-    return m;
-  }
-
-  // Box centred on the origin with per-axis half-extents (hx,hy,hz).
-  _buildBox(hx, hy, hz, uvForFace) {
-    const gl = this.gl;
-    const data = [];
-    for (const f of FACES) {
-      const uv = uvForFace(f.fi);
-      const [u0, v0, u1, v1] = uv;
-      const uvc = [[u0, v1], [u1, v1], [u1, v0], [u0, v0]];
-      const corner = (i) => {
-        const c = f.c[i];
-        data.push(c[0] * hx, c[1] * hy, c[2] * hz, uvc[i][0], uvc[i][1], f.sh, 0, 0);
-      };
-      corner(0); corner(1); corner(2);
-      corner(0); corner(2); corner(3);
-    }
-    const arr = new Float32Array(data);
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    const vbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 32, 0);
-    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 32, 12);
-    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, 32, 20);
-    gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, 32, 24);
-    gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 1, gl.FLOAT, false, 32, 28);
-    gl.bindVertexArray(null);
-    return { vao, vbo, count: arr.length / 8 };
-  }
-
-  _buildCube(uvForFace) { return this._buildBox(HS, HS, HS, uvForFace); }
-
-  blockCube(blockId) {
-    let m = this.blockCubes.get(blockId);
-    if (!m) {
-      const block = getBlock(blockId);
-      m = this._buildCube((fi) => this.atlas.uvForName(texForFace(block, fi)));
-      this.blockCubes.set(blockId, m);
-    }
-    return m;
-  }
   unitCube() {
     // Untextured white cube (vCol = white) so the item's colour comes purely from
     // uTint at draw time. Built via the multi-box path which writes a white vCol.
@@ -317,14 +240,14 @@ export class EntityRenderer {
   // its bottom sits at the entity origin.
   modelFor(e) {
     if (e.type === "drop") {
-      const it = getItem(e.data.key);
-      if (it && it.type === "block") {
-        const blk = getBlock(it.blockId);
-        if (blk.render === "cross") return { mesh: this.flatSprite(it.blockId), textured: true, tint: [1, 1, 1], yOff: HS };
-        return { mesh: this.blockCube(it.blockId), textured: true, tint: [1, 1, 1], yOff: HS };
+      // the shared item model (same mesh the held viewmodel uses): block items
+      // as their real shape, everything else as an extruded sprite
+      const m = this.itemMeshes.get(e.data.key);
+      if (m) {
+        return { mesh: m, textured: true, tint: [1, 1, 1], yOff: 0.06,
+                 scale: m.kind === "shape" ? 0.44 : 0.58 };
       }
-      const col = it && it.color ? hexToRgb(it.color) : [0.8, 0.8, 0.8];
-      return { mesh: this.unitCube(), textured: false, tint: col, yOff: HS };
+      return { mesh: this.unitCube(), textured: false, tint: [0.8, 0.8, 0.8], yOff: HS };
     }
     if (e.type === "boat") {
       return { mesh: this.boat(), textured: false, tint: [1, 1, 1], yOff: 0 };
@@ -435,13 +358,18 @@ export class EntityRenderer {
     const now = performance.now();
     gl.useProgram(prog);
     gl.uniformMatrix4fv(prog.uniform("uLightVP"), false, lightVP);
+    // textured item drops discard transparent texels (sprite-shaped shadows)
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlas.texture);
+    gl.uniform1i(prog.uniform("uAtlas"), 0);
     ents.forEach((e) => {
       const m = this.modelFor(e);
       if (!m) return;
       const bob = (e.data && e.data.bob != null) ? Math.sin(e.data.bob) * 0.06 : 0;
-      mat4.modelMatrix(this._model, e.pos[0], e.pos[1] + m.yOff + bob, e.pos[2], e.yaw, 1);
+      mat4.modelMatrix(this._model, e.pos[0], e.pos[1] + m.yOff + bob, e.pos[2], e.yaw, m.scale || 1);
       gl.uniformMatrix4fv(prog.uniform("uModel"), false, this._model);
       gl.uniform4fv(prog.uniform("uBones[0]"), this._bonesFor(e, now) || this._zeroBones);
+      gl.uniform1f(prog.uniform("uCutout"), m.textured ? 1 : 0);
       gl.bindVertexArray(m.mesh.vao);
       gl.drawArrays(gl.TRIANGLES, 0, m.mesh.count);
     });
@@ -474,7 +402,7 @@ export class EntityRenderer {
       const skyL = world.getSky(cx, cy, cz) / 15;
       const blkL = world.getBlockLight(cx, cy, cz) / 15;
       const bob = (e.data && e.data.bob != null) ? Math.sin(e.data.bob) * 0.06 : 0;
-      mat4.modelMatrix(this._model, e.pos[0], e.pos[1] + m.yOff + bob, e.pos[2], e.yaw, 1);
+      mat4.modelMatrix(this._model, e.pos[0], e.pos[1] + m.yOff + bob, e.pos[2], e.yaw, m.scale || 1);
       gl.uniformMatrix4fv(p.uniform("uModel"), false, this._model);
       gl.uniform4fv(p.uniform("uBones[0]"), this._bonesFor(e, now) || this._zeroBones);
       gl.uniform1f(p.uniform("uSky"), skyL);
@@ -486,11 +414,6 @@ export class EntityRenderer {
     });
     gl.bindVertexArray(null);
   }
-}
-
-function hexToRgb(h) {
-  const n = parseInt(h.slice(1), 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
 // Per-type animation tuning. ref = the speed (blocks/s) that reads as a "full"

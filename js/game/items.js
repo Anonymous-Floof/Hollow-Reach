@@ -3,6 +3,7 @@
 // item procedurally (no image files) for the HUD and inventory.
 
 import { BLOCKS, BLOCK, getBlock, texForFace, TIER } from "../world/blocks.js";
+import { displayBoxes } from "../world/shapes.js";
 
 export const ITEMS = {};
 
@@ -158,8 +159,10 @@ export function maxDurability(key) { const i = ITEMS[key]; return i ? i.durabili
 // ---------------------------------------------------------------------------
 // Non-block items are hand-placed 16×16 pixel sprites blitted at 2× onto the
 // 32px canvas, with an automatic 1px dark outline so they pop on any slot
-// background. Block items render as a true 2:1 isometric cube sampled
-// straight from the atlas (top diamond + two skewed, shaded side faces).
+// background. The same sprites (outline included) are painted into the texture
+// atlas as `item:<key>` tiles, where render/itemmesh.js extrudes them into the
+// dropped/held 3D models — icon and model always match. Block items render as
+// a 2:1 isometric projection of their display shape, sampled from the atlas.
 let ICON_ATLAS = null;
 
 export function buildIcons(atlas) {
@@ -204,6 +207,8 @@ function blit(ctx, g) {
 
 // Shared wood palette for handles, hafts and grips.
 const HW = "#a8845a", HM = "#7e6038", HD = "#553f24";
+// Outline colour for icon + atlas item sprites.
+const OUTLINE = "rgba(24,18,12,0.82)";
 
 // Vertical two-tone haft with a darker butt end.
 function haft(g, y0, y1) {
@@ -249,10 +254,17 @@ const SPRITES = {
   },
 
   sword(g, col) {
-    const M = shade(col, 1.45), m = col;
-    // diagonal blade with a lit upper edge, cross-guard, grip and pommel
-    pset(g, 14, 1, M);
-    for (let i = 0; i < 9; i++) { pset(g, 13 - i, 2 + i, M); pset(g, 14 - i, 3 + i, m); }
+    const M = shade(col, 1.45), m = col, d = shade(col, 0.72);
+    // diagonal blade, three texels thick (lit edge / core / shaded edge). The
+    // rows stack straight DOWN from the lit edge — offsetting them diagonally
+    // leaves corner-touching gaps that read as a checkerboard once the sprite
+    // is extruded and magnified as the held/dropped model.
+    pset(g, 14, 1, M); pset(g, 14, 2, m);
+    for (let i = 0; i < 9; i++) {
+      pset(g, 13 - i, 2 + i, M);
+      pset(g, 13 - i, 3 + i, m);
+      pset(g, 13 - i, 4 + i, d);
+    }
     for (const [x, y] of [[2, 9], [3, 10], [4, 11], [5, 12], [6, 13]]) pset(g, x, y, HD);
     pset(g, 3, 10, HM); pset(g, 5, 12, HM);
     pset(g, 3, 12, HM); pset(g, 2, 13, HM);      // grip
@@ -454,6 +466,31 @@ const SPRITES = {
   },
 };
 
+// The raw (un-outlined) 16×16 sprite grid for a non-block item — the same
+// pixels the icon shows. The texture atlas paints these into `item:<key>` tiles
+// so the 3D dropped/held item meshes are built from the very same art.
+export function spriteGridFor(item) {
+  const g = newGrid();
+  const paint = SPRITES[item.iconKind];
+  const col = item.color || "#cccccc";
+  if (paint) paint(g, col, item);
+  else for (let y = 5; y <= 10; y++) prow(g, 5, 10, y, col);   // fallback square
+  return g;
+}
+
+// All item sprite tiles for the atlas, keyed by tile name, with the same dark
+// outline the icons get (pale sprites like iron tools need the rim to read
+// against the world). Cross-render blocks (torch, plants) are skipped — their
+// block texture already is their sprite.
+export function itemSpriteTiles() {
+  const tiles = {};
+  for (const key in ITEMS) {
+    if (ITEMS[key].iconKind === "block") continue;
+    tiles["item:" + key] = outlined(spriteGridFor(ITEMS[key]), OUTLINE);
+  }
+  return tiles;
+}
+
 function drawIcon(item) {
   const S = 32;
   const c = document.createElement("canvas");
@@ -465,15 +502,20 @@ function drawIcon(item) {
     drawBlockIcon(ctx, S, item);
     return c;
   }
-  const g = newGrid();
-  const paint = SPRITES[item.iconKind];
-  const col = item.color || "#cccccc";
-  if (paint) paint(g, col, item);
-  else for (let y = 5; y <= 10; y++) prow(g, 5, 10, y, col);   // fallback square
-  blit(ctx, outlined(g, "rgba(24,18,12,0.82)"));
+  blit(ctx, outlined(spriteGridFor(item), OUTLINE));
   return c;
 }
 
+// ---- isometric block icons ----
+// Blocks render as a true 2:1 isometric projection of their *display shape*
+// (shapes.displayBoxes), so stairs/slabs/doors are told apart at a glance
+// instead of all drawing as the same full cube. Projection of block-local
+// (x,y,z) in [0,1]³, matching a 32px canvas with the cube spanning (2,2)-(26,26):
+//   sx = 14 + 12(x − z)
+//   sy = 26 − 12y − 6(x + z)
+// Visible faces per box: top (y=y1), left (x=x0), right (z=z0). Each face is an
+// affine map of its 16×16 tile, drawn with setTransform + darkened per side so
+// the shape reads with a fixed top-left light.
 function drawBlockIcon(ctx, S, item) {
   const block = getBlock(item.blockId);
   const src = ICON_ATLAS.canvas;
@@ -483,20 +525,30 @@ function drawBlockIcon(ctx, S, item) {
     ctx.drawImage(src, t[0], t[1], 16, 16, 6, 3, 20, 26);
     return;
   }
-  // 2:1 isometric cube: left/right faces are vertically-skewed parallelograms,
-  // the top is a diamond. setTransform maps texture axes to face edges; faces
-  // are darkened per-side so the cube reads with a fixed top-left light.
-  const left = ICON_ATLAS.pixelRect(texForFace(block, 4));   // +z face
-  const right = ICON_ATLAS.pixelRect(texForFace(block, 0));  // +x face
-  const top = ICON_ATLAS.pixelRect(texForFace(block, 2));
+  const boxes = displayBoxes(block.render).slice();
+  // painter's order: lower boxes first, then nearer ones (near = low x+z)
+  boxes.sort((a, b) => (a[1] - b[1]) || ((b[0] + b[2]) - (a[0] + a[2])));
+
+  const leftT = ICON_ATLAS.pixelRect(texForFace(block, 4));   // x0 face art
+  const rightT = ICON_ATLAS.pixelRect(texForFace(block, 0));  // z0 face art
+  const topT = ICON_ATLAS.pixelRect(texForFace(block, 2));
   ctx.save();
-  ctx.setTransform(0.75, 0.375, 0, 0.75, 2, 8);              // left face
-  ctx.drawImage(src, left[0], left[1], 16, 16, 0, 0, 16, 16);
-  ctx.fillStyle = "rgba(4,4,14,0.20)"; ctx.fillRect(0, 0, 16, 16);
-  ctx.setTransform(0.75, -0.375, 0, 0.75, 14, 14);           // right face
-  ctx.drawImage(src, right[0], right[1], 16, 16, 0, 0, 16, 16);
-  ctx.fillStyle = "rgba(4,4,14,0.38)"; ctx.fillRect(0, 0, 16, 16);
-  ctx.setTransform(0.75, 0.375, 0.75, -0.375, 2, 8);         // top diamond
-  ctx.drawImage(src, top[0], top[1], 16, 16, 0, 0, 16, 16);
+  const face = (t, a, b, cc, d, e, f, dark) => {
+    ctx.setTransform(a, b, cc, d, e, f);
+    ctx.drawImage(src, t[0], t[1], 16, 16, 0, 0, 16, 16);
+    if (dark) { ctx.fillStyle = `rgba(4,4,14,${dark})`; ctx.fillRect(0, 0, 16, 16); }
+  };
+  for (const [x0, y0, z0, x1, y1, z1] of boxes) {
+    const ex = 14 + 12 * (x0 - z0), dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    // left face (x = x0): tile u runs z1→z0, v runs y1→y0
+    face(leftT, 0.75 * dz, 0.375 * dz, 0, 0.75 * dy,
+      14 + 12 * (x0 - z1), 26 - 12 * y1 - 6 * (x0 + z1), 0.20);
+    // right face (z = z0): tile u runs x0→x1, v runs y1→y0
+    face(rightT, 0.75 * dx, -0.375 * dx, 0, 0.75 * dy,
+      ex, 26 - 12 * y1 - 6 * (x0 + z0), 0.38);
+    // top face (y = y1): tile u runs x0→x1, v runs z0→z1
+    face(topT, 0.75 * dx, -0.375 * dx, -0.75 * dz, -0.375 * dz,
+      ex, 26 - 12 * y1 - 6 * (x0 + z0), 0);
+  }
   ctx.restore();
 }

@@ -103,3 +103,16 @@ export function collisionBoxes(render, meta) {
   if (render === "ladder") return [];
   return renderBoxes(render, meta) || [];
 }
+
+// The metadata a shaped block is *shown* with when it isn't placed in the world
+// (inventory icons, dropped items, the held viewmodel) — one canonical pose per
+// render type so all three read the same. Chosen so the shape's identity is
+// obvious from the standard iso/three-quarter view: stairs step up to the
+// right, slabs sit in the bottom half, doors stand closed and tall.
+const DISPLAY_META = { stair: 0, slab: 0, vslab: 0, ladder: 3, trapdoor: 0, door: 0, bed: 0 };
+
+// Boxes for an item-display rendition of a block: its shaped boxes in the
+// canonical pose, or the full cube when the block isn't shaped.
+export function displayBoxes(render) {
+  return renderBoxes(render, DISPLAY_META[render] || 0) || [[0, 0, 0, 1, 1, 1]];
+}

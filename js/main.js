@@ -14,7 +14,7 @@ import { addScreenshot, addPanorama, getMenuPanorama, setMenuPanorama, makeThumb
 import { Player } from "./game/player.js";
 import { Interact } from "./game/interact.js";
 import { Inventory } from "./game/inventory.js";
-import { buildIcons, getItem } from "./game/items.js";
+import { buildIcons } from "./game/items.js";
 import { HUD } from "./ui/hud.js";
 import { Menu } from "./ui/menu.js";
 import { InventoryUI } from "./ui/inventoryui.js";
@@ -1004,10 +1004,8 @@ class Game {
 
     const selection = this.state === "playing" ? this.interact.selection : null;
     const slot = this.inventory.selectedSlot();
-    let heldBlockId = 0;
-    if (slot) { const it = getItem(slot.key); if (it && it.type === "block") heldBlockId = it.blockId; }
 
-    this.renderer.render(this.world, this.camera, this.sky, selection, heldBlockId, this.player.bobState(), this._underwater || 0);
+    this.renderer.render(this.world, this.camera, this.sky, selection, slot ? slot.key : null, this.player.bobState(), this._underwater || 0);
 
     // floating names over remote players
     if (this.net && this.net.ghosts && this.net.ghosts.players.size) {

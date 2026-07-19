@@ -15,6 +15,24 @@ version heading when it's time to ship.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-19
+
+### Added
+- Dropped items are now full 3D models: blocks appear as their real shape
+  (stairs are stair-shaped, slabs are slab-shaped) and non-block items like
+  tools and food are extruded from their pixel-art sprite.
+- The held viewmodel uses the same 3D models — swords, pickaxes, and every
+  other item now show their actual sprite shape in your hand instead of a
+  tinted cube.
+- Item drop shadows are sprite-shaped: a dropped sword casts a sword-shaped
+  shadow instead of a solid rectangle.
+
+### Changed
+- Inventory icons for shaped blocks (stairs, slabs, doors, trapdoors, beds)
+  now show the block's actual shape in isometric view instead of a full cube.
+- Sword pixel art widened to three texels so the blade reads cleanly at the
+  larger held/dropped model scale.
+
 ## [1.0.0] - 2026-07-19
 
 First public release. Hollowreach is a voxel sandbox that runs entirely in the
@@ -62,5 +80,6 @@ Python script. Highlights of everything on board at 1.0:
 - Windows (`run.bat`) and Linux/macOS (`run.sh`) launchers; the only
   requirements are Python 3 and a WebGL2 browser.
 
-[Unreleased]: https://github.com/Anonymous-Floof/Hollow-Reach/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Anonymous-Floof/Hollow-Reach/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Anonymous-Floof/Hollow-Reach/releases/tag/v1.1.0
 [1.0.0]: https://github.com/Anonymous-Floof/Hollow-Reach/releases/tag/v1.0.0

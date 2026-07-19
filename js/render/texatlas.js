@@ -1,11 +1,14 @@
 // Procedurally paints every block texture onto one canvas (the atlas) and
 // uploads it as a GL texture. No external image files. Each texture is drawn
-// from a deterministic seed so it looks the same every run.
+// from a deterministic seed so it looks the same every run. Non-block items
+// also get a tile each (`item:<key>`, their outlined 16×16 icon sprite from
+// game/items.js) so dropped/held item meshes are textured from the same atlas.
 //
 // To add a texture: add a painter to PAINTERS keyed by the same name you used
 // in blocks.js tex:{}. Unknown names fall back to a magenta "missing" tile.
 
 import { BLOCKS } from "../world/blocks.js";
+import { itemSpriteTiles } from "../game/items.js";
 import { mulberry32, hashSeed } from "../core/prng.js";
 
 const TILE = 16; // pixels per texture tile
@@ -673,12 +676,16 @@ function missing(ctx, ox, oy) {
 
 // Build the atlas. Returns { texture, uvForName(name) -> [u0,v0,u1,v1] }.
 export function buildAtlas(gl) {
-  // Gather every texture name referenced by blocks.
+  // Gather every texture name referenced by blocks, plus one `item:<key>` tile
+  // per non-block item (its 16×16 icon sprite) so dropped/held item meshes can
+  // be textured from the same atlas as everything else.
   const names = new Set();
   for (const b of BLOCKS) {
     if (!b.tex) continue;
     for (const v of Object.values(b.tex)) names.add(v);
   }
+  const itemTiles = itemSpriteTiles();
+  for (const n of Object.keys(itemTiles)) names.add(n);
   const list = [...names];
   const cols = Math.ceil(Math.sqrt(list.length));
   const rows = Math.ceil(list.length / cols);
@@ -692,8 +699,17 @@ export function buildAtlas(gl) {
   list.forEach((name, i) => {
     const cx = i % cols, cy = (i / cols) | 0;
     const ox = cx * TILE, oy = cy * TILE;
-    const painter = PAINTERS[name] || missing;
-    painter(ctx, ox, oy, mulberry32(hashSeed(name)));
+    const grid = itemTiles[name];
+    if (grid) {
+      // item sprite tile: blit the 16×16 colour grid (empty cells stay transparent)
+      for (let y = 0; y < TILE; y++) for (let x = 0; x < TILE; x++) {
+        const col = grid[y * TILE + x];
+        if (col) { ctx.fillStyle = col; ctx.fillRect(ox + x, oy + y, 1, 1); }
+      }
+    } else {
+      const painter = PAINTERS[name] || missing;
+      painter(ctx, ox, oy, mulberry32(hashSeed(name)));
+    }
     // Inset by half a texel to avoid neighbour-tile bleeding at grazing angles
     // (NEAREST sampling can otherwise pick up the adjacent tile on tile edges).
     const e = 0.5 / TILE;
